@@ -6,8 +6,8 @@ TARGET_FBB =        flatbuffers
 TARGET_SO =         lua_flatbuffers.so
 TARGET_A  =         liblua_flatbuffers.a
 PREFIX =            /usr/local
-#CFLAGS =            -g3 -Wall -pedantic -fno-inline
-CFLAGS =            -O2 -Wall -pedantic -DNDEBUG
+CFLAGS =            -g3 -Wall -pedantic -fno-inline
+#CFLAGS =            -O2 -Wall -pedantic -DNDEBUG
 
 LUA_INCLUDE_DIR =   $(PREFIX)/include
 FBB_INCLUDE_DIR =   ./flatbuffers-1.4.0/include
@@ -19,7 +19,7 @@ LUA_FLATBUFFERS_LDFLAGS =     -shared -L$(FBB_LIBRARY_DIR)
 AR= ar rcu
 RANLIB= ranlib
 
-OBJS =              lflatbuffers.o
+OBJS =              lflatbuffers.o main.o
 
 .PHONY: all clean test build
 
@@ -27,6 +27,9 @@ OBJS =              lflatbuffers.o
 	$(CC) -c $(CFLAGS) $(LUA_FLATBUFFERS_CFLAGS) -o $@ $<
 
 all: $(TARGET_SO)
+
+tcpp: $(OBJS)
+	$(CC) -o main $(OBJS) -L$(FBB_LIBRARY_DIR) -llua
 
 build: $(TARGET_FBB)
 
@@ -36,7 +39,7 @@ $(TARGET_FBB):flatbuffers-1.4.0.tar.gz
 	$(MAKE) -C flatbuffers-1.4.0 all
 
 $(TARGET_SO): $(OBJS)
-	$(CC) $(LDFLAGS) $(LUA_FLATBUFFERS_LDFLAGS) -o $@ $(OBJS)
+	$(CC) $(LDFLAGS) $(LUA_FLATBUFFERS_LDFLAGS) -o $@ $(OBJS) -lflatbuffers
 
 $(TARGET_A): $(OBJS)
 	$(AR) $@ $(OBJS)

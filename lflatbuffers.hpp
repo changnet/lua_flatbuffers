@@ -7,24 +7,30 @@ extern "C"
 extern int luaopen_lua_flatbuffers( lua_State *L );
 }
 
-#include "flatbuffers/flatbuffers.h"
-#include "flatbuffers/idl.h"
-#include "flatbuffers/util.h"
+#include <flatbuffers/flatbuffers.h>
+#include <flatbuffers/idl.h>
 
+#include <stack>
 #include <string>
 #include <unordered_map>
 
 class lflatbuffers
 {
 public:
-    bool load_bfbs_path( const char *path );
+    bool load_bfbs_path( const char *path,const char *postfix = NULL );
     bool load_bfbs_file( const char *file );
+private:
+    struct
+    {
+        std::string what;
+        std::stack< std::string > backtrace;
+    } _error_collector;
 private:
     flatbuffers::FlatBufferBuilder _fbb;
     /* reflection::GetSchema cast string buffer to reflection::Schema
      * so you need to hold the string buffer
      */
-    std::unordered_map< std::string,std::string > _bfbs_buff;
+    std::unordered_map< std::string,std::string > _bfbs_schema;
 };
 
 #endif /* __LFLATBUFFERS_H__ */
