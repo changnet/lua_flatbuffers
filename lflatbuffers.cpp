@@ -101,6 +101,18 @@ const char *lflatbuffers::last_error()
     return _error_collector.what.c_str();
 }
 
+int lflatbuffers::encode( lua_State *L,
+    const char *schema,const char *object,int index )
+{
+    return 0;
+}
+
+int lflatbuffers::decode( lua_State *L,
+    const char *schema,const char *object,int index )
+{
+    return 0;
+}
+
 /* ========================== static function for lua ======================= */
 
 static int load_bfbs_path( lua_State *L )
@@ -146,6 +158,25 @@ static int load_bfbs_file( lua_State *L )
 
 static int encode( lua_State *L )
 {
+    class lflatbuffers** lfb =
+        (class lflatbuffers**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( lfb == NULL || *lfb == NULL )
+    {
+        return luaL_error( L, "encode argument #1 expect %s", LIB_NAME );
+    }
+
+    const char *schema = luaL_checkstring( L,2 );
+    const char *object = luaL_checkstring( L,3 );
+    if ( !lua_istable( L,4) )
+    {
+        return luaL_error( L,"argument #1 expect table,got %s",
+            lua_typename(L, lua_type(L, 4)) );
+    }
+
+    if ( (*lfb)->encode( L,schema,object,4 ) < 0 )
+    {
+        return luaL_error( L,(*lfb)->last_error() );
+    }
     return 1;
 }
 

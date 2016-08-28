@@ -17,6 +17,9 @@ extern int luaopen_lua_flatbuffers( lua_State *L );
 class lflatbuffers
 {
 public:
+    int encode( lua_State *L,const char *schema,const char *object,int index );
+    int decode( lua_State *L,const char *schema,const char *object,int index );
+
     const char *last_error();
     bool load_bfbs_file( const char *file );
     int load_bfbs_path( const char *path,const char *postfix = NULL );
