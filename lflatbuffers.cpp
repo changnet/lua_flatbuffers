@@ -6,12 +6,31 @@
 #include <iostream>
 
 /* linux open dir */
-#include <sys/types.h>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 
 #define LIB_NAME "lua_flatbuffers"
 
-bool lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
+static int is_postfix_file( const char *path,const char *postfix )
+{
+    /* simply check,not consider file like ./subdir/.bfbs */
+    size_t sz = strlen( postfix );
+    size_t ps = strlen( path );
+
+    /* file like .bfbs will be ignore */
+    if ( ps <= sz + 2 ) return 0;
+
+    if ( '.' == path[ps-sz-1] && 0 == strcmp( path + ps - sz,postfix ) )
+    {
+        return true;
+    }
+
+    return false;
+}
+
+int lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
 {
     DIR *dir = opendir( path );
     if ( !dir )
@@ -21,18 +40,29 @@ bool lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
         _error_collector.what.append( "," );
         _error_collector.what.append( strerror(errno) );
 
-        return false;
+        return -1;
     }
 
+    int count = 0;
     struct dirent *dt = NULL;
     while ( (dt = readdir( dir )) )
     {
-        if ( dt->d_type == DT_REG ) //This is a regular file
+        struct stat path_stat;
+        stat( dt->d_name, &path_stat );
+
+        /* dt->d_type == DT_REG not supported by all file system types */
+        if ( S_ISREG( path_stat.st_mode ) //This is a regular file
+            && is_postfix_file( dt->d_name,postfix) )
         {
-            std::cout << dt->d_name << std::endl;
+            if ( !load_bfbs_file( dt->d_name ) )
+            {
+                _bfbs_schema.clear();
+                return -1;
+            }
+            ++ count;
         }
     }
-    return true;
+    return count;
 }
 
 bool lflatbuffers::load_bfbs_file( const char *file )
@@ -57,10 +87,8 @@ bool lflatbuffers::load_bfbs_file( const char *file )
     {
         _bfbs_schema.erase( file );
 
-        _error_collector.what = "inval flatbuffers binary schema file:";
+        _error_collector.what = "invalid flatbuffers binary schema file:";
         _error_collector.what.append( file );
-        _error_collector.what.append( "," );
-        _error_collector.what.append( strerror(errno) );
 
         return false;
     }
@@ -68,7 +96,53 @@ bool lflatbuffers::load_bfbs_file( const char *file )
     return true;
 }
 
+const char *lflatbuffers::last_error()
+{
+    return _error_collector.what.c_str();
+}
+
 /* ========================== static function for lua ======================= */
+
+static int load_bfbs_path( lua_State *L )
+{
+    class lflatbuffers** lfb =
+        (class lflatbuffers**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( lfb == NULL || *lfb == NULL )
+    {
+        return luaL_error(L, "load_bfbs_path argument #1 expect %s", LIB_NAME);
+    }
+
+    const char *path = luaL_checkstring( L,2 );
+    const char *postfix = luaL_optstring( L,3,"bfbs" );
+
+    int count = (*lfb)->load_bfbs_path( path,postfix );
+    if ( count < 0 )
+    {
+        return luaL_error( L,(*lfb)->last_error() );
+    }
+
+    lua_pushinteger( L,count );
+    return 1;
+}
+
+static int load_bfbs_file( lua_State *L )
+{
+    class lflatbuffers** lfb =
+        (class lflatbuffers**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( lfb == NULL || *lfb == NULL )
+    {
+        return luaL_error(L, "load_bfbs_file argument #1 expect %s", LIB_NAME);
+    }
+
+    const char *path = luaL_checkstring( L,2 );
+    if ( !(*lfb)->load_bfbs_file( path ) )
+    {
+        return luaL_error( L,(*lfb)->last_error() );
+    }
+
+    lua_pushinteger( L,1 );
+    return 1;
+}
 
 static int encode( lua_State *L )
 {
@@ -145,6 +219,12 @@ int luaopen_lua_flatbuffers(lua_State *L)
 
     lua_pushcfunction(L, decode);
     lua_setfield(L, -2, "decode");
+
+    lua_pushcfunction(L, load_bfbs_path);
+    lua_setfield(L, -2, "load_bfbs_path");
+
+    lua_pushcfunction(L, load_bfbs_file);
+    lua_setfield(L, -2, "load_bfbs_file");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );
