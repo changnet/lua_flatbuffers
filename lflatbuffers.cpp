@@ -101,9 +101,155 @@ const char *lflatbuffers::last_error()
     return _error_collector.what.c_str();
 }
 
+/* flatbuffers has to be built in post-order,but lua table is not
+ * we have to iterate schema and make a build sequence cache
+ */
+void lflatbuffers::make_build_sequence(
+    const char *schema_name,const reflection::Schema *schema )
+{
+    auto &build_sequence = _build_sequence[schema_name];
+    build_sequence.clear(); /* clear old data if exist */
+
+    const auto *objects = schema->objects();
+    for ( auto itr = objects->begin();itr != objects->end(); itr++ )
+    {
+        const auto *fields = (*itr)->fields();
+        for ( auto itr = fields->begin();itr != fields->end();itr++ )
+        {
+
+        }
+    }
+}
+
+int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,lua_State *L,
+    const reflection::Schema *schema,const reflection::Object* object,int index )
+{
+    // flatbuffers::Vector<flatbuffers::Offset<Field>>
+    const auto *fields = object->fields();
+    //flatbuffers::Vector< flatbuffers::Offset<reflection::Field> >::const_iterator
+    for ( auto itr = fields->begin();itr != fields->end();itr++ )
+    {
+        const reflection::Field *field = *itr;
+
+        lua_getfield( L,index,field->name()->c_str() );
+        if ( lua_isnil( L,index + 1 ) )
+        {
+            if ( field->required() )
+            {
+                _error_collector.what = "missing required field";
+                _error_collector.backtrace.push( field->name()->c_str() );
+                return -1;
+            }
+            continue; /* optional field */
+        }
+        uint16_t off = field->offset();
+        switch ( field->type()->base_type() )
+        {
+            case reflection::None: /* auto fall through */
+            case reflection::UType:
+            {
+                _error_collector.what = "unknow type";
+                return -1;
+            }break;
+            case reflection::Bool:
+            {
+                bool bool_val = lua_toboolean( L,index + 1 );
+                _fbb.AddElement<uint8_t >( off, bool_val,0 );
+            }break;
+            case reflection::Byte:
+            {
+            }break;
+            case reflection::UByte:
+            {
+            }break;
+            case reflection::Short:
+            {
+            }break;
+            case reflection::UShort:
+            {
+            }break;
+            case reflection::Int:
+            {
+            }break;
+            case reflection::UInt:
+            {
+            }break;
+            case reflection::Long:
+            {
+            }break;
+            case reflection::ULong:
+            {
+            }break;
+            case reflection::Float:
+            {
+            }break;
+            case reflection::Double:
+            {
+            }break;
+            case reflection::String:
+            {
+            }break;
+            case reflection::Vector:
+            {
+            }break;
+            case reflection::Obj: /* table or struct */
+            {
+                // reflection::Object
+                const auto *sub_object =
+                    schema->objects()->Get(field->type()->index());
+                if ( sub_object->is_struct() )
+                {
+
+                }
+                else
+                {
+
+                }
+            }break;
+            case reflection::Union:
+            {
+            }break;
+        }
+    }
+    return 0;
+}
+
 int lflatbuffers::encode( lua_State *L,
     const char *schema,const char *object,int index )
 {
+    schema_map::iterator itr = _bfbs_schema.find( schema );
+    if ( itr == _bfbs_schema.end() )
+    {
+        _error_collector.what = "no such schema";
+        return -1;
+    }
+
+    // reflection::Schema
+    const auto *_schema = reflection::GetSchema( itr->second.c_str() );
+    assert( schema );
+
+    // reflection::Object
+    const auto *_object = _schema->objects()->LookupByKey( object );
+    if ( !_object )
+    {
+        _error_collector.what = std::string("no such object(")
+            + object + ") at schema(" + schema + ").";
+        return -1;
+    }
+
+    /* Reset all the state in this FlatBufferBuilder so it can be reused
+     * to construct another buffer
+     */
+    _fbb.Clear();
+
+    flatbuffers::uoffset_t offset;
+    if ( encode_object( offset,L,_schema,_object,index ) <  0 )
+    {
+        _error_collector.schema = schema;
+        return -1;
+    }
+    _fbb.Finish( flatbuffers::Offset<void>(offset) );
+
     return 0;
 }
 
