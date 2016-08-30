@@ -34,27 +34,34 @@ private:
 
     struct sequence
     {
-        std::vector< std::string > name;
-        /* we don't have to reference object pointer here
-         * but if we do,we do't need to call LookupByKey everytime
-         */
-        const reflection::Object* object;
+        const reflection::Field* field;
+        const reflection::Object *object;
+        std::vector< struct sequence > nested;/* table,vector */
+        std::vector< const reflection::Field* > scalar;/* struct,string,int ... */
+
+        sequence() : field(NULL),object(NULL) {}
     };
 
-    typedef std::unordered_map< std::string,std::string > schema_map;
-    typedef std::unordered_map< std::string,std::vector< struct sequence > > sequence_map;
+    typedef std::unordered_map< std::string,struct sequence > sequence_map;
+    typedef std::unordered_map< std::string,sequence_map >      schema_map;
 
     void make_build_sequence(
         const char *schema_name,const reflection::Schema *schema );
-    int encode_object( flatbuffers::uoffset_t &offset,lua_State *L,
-        const reflection::Schema *schema,const reflection::Object* object,int index );
+    void make_object_sequence( const reflection::Schema *schema,
+            struct sequence &seq,const reflection::Object *obj );
+    int encode_object( flatbuffers::uoffset_t &offset,
+                    lua_State *L,const struct sequence &seq,int index );
+    int encode_object_field( flatbuffers::uoffset_t &offset,lua_State *L,
+        const reflection::Field *field,int index,const struct sequence *seq );
+    int encode_scalar_field(
+        lua_State *L,const reflection::Field *field,int index );
 private:
     flatbuffers::FlatBufferBuilder _fbb;
     /* reflection::GetSchema cast string buffer to reflection::Schema
      * so you need to hold the string buffer
      */
-    schema_map _bfbs_schema;
-    sequence_map _build_sequence;
+    std::unordered_map< std::string,std::string > _bfbs_buffer;
+    schema_map _schema;
 };
 
 #endif /* __LFLATBUFFERS_H__ */

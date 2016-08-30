@@ -13,6 +13,7 @@
 
 #define LIB_NAME "lua_flatbuffers"
 
+/* check if postfix match */
 static int is_postfix_file( const char *path,const char *postfix )
 {
     /* simply check,not consider file like ./subdir/.bfbs */
@@ -30,6 +31,7 @@ static int is_postfix_file( const char *path,const char *postfix )
     return false;
 }
 
+/* load all the schema files in this directory */
 int lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
 {
     DIR *dir = opendir( path );
@@ -56,7 +58,7 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
         {
             if ( !load_bfbs_file( dt->d_name ) )
             {
-                _bfbs_schema.clear();
+                _bfbs_buffer.clear();
                 return -1;
             }
             ++ count;
@@ -68,10 +70,10 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
 bool lflatbuffers::load_bfbs_file( const char *file )
 {
     /* if the file already loaded,consider it need to update,not dumplicate */
-    std::string &bfbs = _bfbs_schema[file];
+    std::string &bfbs = _bfbs_buffer[file];
     if ( !flatbuffers::LoadFile( file,true,&bfbs ) )
     {
-        _bfbs_schema.erase( file );
+        _bfbs_buffer.erase( file );
 
         _error_collector.what = "can not load file:";
         _error_collector.what.append( file );
@@ -85,7 +87,7 @@ bool lflatbuffers::load_bfbs_file( const char *file )
         reinterpret_cast<const uint8_t *>(bfbs.c_str()), bfbs.length());
     if ( !reflection::VerifySchemaBuffer(encode_verifier) )
     {
-        _bfbs_schema.erase( file );
+        _bfbs_buffer.erase( file );
 
         _error_collector.what = "invalid flatbuffers binary schema file:";
         _error_collector.what.append( file );
@@ -93,6 +95,7 @@ bool lflatbuffers::load_bfbs_file( const char *file )
         return false;
     }
 
+    make_build_sequence( file,reflection::GetSchema( bfbs.c_str() ) );
     return true;
 }
 
@@ -101,136 +104,309 @@ const char *lflatbuffers::last_error()
     return _error_collector.what.c_str();
 }
 
+void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
+    struct sequence &seq,const reflection::Object *object )
+{
+#define PUSH_SEQUENCE()   \
+    do{\
+        struct sequence sub_seq;\
+        sub_seq.field = *field_itr;\
+        sub_seq.object = sub_object;\
+        make_object_sequence( schema,sub_seq,sub_object );\
+        seq.nested.push_back( sub_seq );\
+    }while(0)
+
+    const auto *fields = object->fields();
+    for ( auto field_itr = fields->begin();field_itr != fields->end();field_itr++ )
+    {
+        const reflection::Type *type = (*field_itr)->type();
+        switch ( type->base_type() )
+        {
+            case reflection::Obj:
+            {
+                auto *sub_object = schema->objects()->Get( type->index() );
+                PUSH_SEQUENCE();
+            }break;
+            case reflection::Vector:
+            {
+                if ( reflection::Obj == type->element() )
+                {
+                    auto *sub_object = schema->objects()->Get( type->index() );
+                    PUSH_SEQUENCE();
+                }
+                else
+                {
+                    seq.scalar.push_back( *field_itr );
+                }
+            }break;
+            /* those type fall through */
+            case reflection::Byte:
+            case reflection::Bool:
+            case reflection::UByte:
+            case reflection::Short:
+            case reflection::UShort:
+            case reflection::Int:
+            case reflection::UInt:
+            case reflection::Long:
+            case reflection::ULong:
+            case reflection::Float:
+            case reflection::Double:
+            case reflection::String:
+            case reflection::Union:
+            {
+                seq.scalar.push_back( *field_itr );
+            }break;
+            case reflection::None:
+            case reflection::UType:
+            {
+                /* what is UType ? */
+                assert( false );
+            }break;
+        }
+    }
+
+#undef PUSH_SEQUENCE
+}
+
 /* flatbuffers has to be built in post-order,but lua table is not
  * we have to iterate schema and make a build sequence cache
  */
 void lflatbuffers::make_build_sequence(
     const char *schema_name,const reflection::Schema *schema )
 {
-    auto &build_sequence = _build_sequence[schema_name];
-    build_sequence.clear(); /* clear old data if exist */
+    auto &schema_sequence = _schema[schema_name];
+    /* clear old data if exist,in case update operation */
+    schema_sequence.clear();
 
     const auto *objects = schema->objects();
     for ( auto itr = objects->begin();itr != objects->end(); itr++ )
     {
-        const auto *fields = (*itr)->fields();
-        for ( auto itr = fields->begin();itr != fields->end();itr++ )
-        {
+        auto &seq = schema_sequence[(*itr)->name()->c_str()];
 
-        }
+        seq.object = *itr; /* root object,field is NULL */
+        make_object_sequence( schema,seq,*itr );
     }
 }
 
-int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,lua_State *L,
-    const reflection::Schema *schema,const reflection::Object* object,int index )
+/* encode a field
+ * return value:-1:error,0:optional field,1:success
+ */
+int lflatbuffers::encode_object_field( flatbuffers::uoffset_t &offset,lua_State *L,
+        const reflection::Field *field,int index,const struct sequence *seq )
 {
-    // flatbuffers::Vector<flatbuffers::Offset<Field>>
-    const auto *fields = object->fields();
-    //flatbuffers::Vector< flatbuffers::Offset<reflection::Field> >::const_iterator
-    for ( auto itr = fields->begin();itr != fields->end();itr++ )
+    lua_getfield( L,index,field->name()->c_str() );
+    if ( lua_isnil( L,index + 1 ) )
     {
-        const reflection::Field *field = *itr;
-
-        lua_getfield( L,index,field->name()->c_str() );
-        if ( lua_isnil( L,index + 1 ) )
+        if ( field->required() )
         {
-            if ( field->required() )
+            _error_collector.what = "missing required field";
+            _error_collector.backtrace.push( field->name()->c_str() );
+            return -1;
+        }
+
+        lua_pop( L,1 );
+        return 0; /* optional field */
+    }
+
+    uint16_t off = field->offset();
+    switch ( field->type()->base_type() )
+    {
+        case reflection::None: /* auto fall through */
+        case reflection::UType:
+        {
+            _error_collector.what = "unsupported type";
+
+            lua_pop( L,1 );
+            return -1;
+        }break;
+        case reflection::Bool:
+        {
+            bool bool_val = lua_toboolean( L,index + 1 );
+            _fbb.AddElement<uint8_t >( off, bool_val,0 );
+        }break;
+        case reflection::Byte:
+        {
+        }break;
+        case reflection::UByte:
+        {
+        }break;
+        case reflection::Short:
+        {
+        }break;
+        case reflection::UShort:
+        {
+        }break;
+        case reflection::Int:
+        {
+        }break;
+        case reflection::UInt:
+        {
+        }break;
+        case reflection::Long:
+        {
+        }break;
+        case reflection::ULong:
+        {
+        }break;
+        case reflection::Float:
+        {
+        }break;
+        case reflection::Double:
+        {
+        }break;
+        case reflection::String:
+        {
+        }break;
+        case reflection::Vector:
+        {
+        }break;
+        case reflection::Obj: /* table or struct */
+        {
+            assert( seq );
+            if ( encode_object( offset,L,*seq,index + 1 ) < 0 )
             {
-                _error_collector.what = "missing required field";
-                _error_collector.backtrace.push( field->name()->c_str() );
+                lua_pop( L,1 );
                 return -1;
             }
-            continue; /* optional field */
-        }
-        uint16_t off = field->offset();
-        switch ( field->type()->base_type() )
+        }break;
+        case reflection::Union:
         {
-            case reflection::None: /* auto fall through */
-            case reflection::UType:
-            {
-                _error_collector.what = "unknow type";
-                return -1;
-            }break;
-            case reflection::Bool:
-            {
-                bool bool_val = lua_toboolean( L,index + 1 );
-                _fbb.AddElement<uint8_t >( off, bool_val,0 );
-            }break;
-            case reflection::Byte:
-            {
-            }break;
-            case reflection::UByte:
-            {
-            }break;
-            case reflection::Short:
-            {
-            }break;
-            case reflection::UShort:
-            {
-            }break;
-            case reflection::Int:
-            {
-            }break;
-            case reflection::UInt:
-            {
-            }break;
-            case reflection::Long:
-            {
-            }break;
-            case reflection::ULong:
-            {
-            }break;
-            case reflection::Float:
-            {
-            }break;
-            case reflection::Double:
-            {
-            }break;
-            case reflection::String:
-            {
-            }break;
-            case reflection::Vector:
-            {
-            }break;
-            case reflection::Obj: /* table or struct */
-            {
-                // reflection::Object
-                const auto *sub_object =
-                    schema->objects()->Get(field->type()->index());
-                if ( sub_object->is_struct() )
-                {
+        }break;
+    }
 
-                }
-                else
-                {
+    return 0;
+}
 
-                }
-            }break;
-            case reflection::Union:
-            {
-            }break;
+int lflatbuffers::encode_scalar_field(
+    lua_State *L,const reflection::Field *field,int index )
+{
+    lua_getfield( L,index,field->name()->c_str() );
+    if ( lua_isnil( L,index + 1 ) )
+    {
+        if ( field->required() )
+        {
+            _error_collector.what = "missing required field";
+            _error_collector.backtrace.push( field->name()->c_str() );
+            return -1;
+        }
+
+        lua_pop( L,1 );
+        return 0; /* optional field */
+    }
+
+    uint16_t off = field->offset();
+    switch ( field->type()->base_type() )
+    {
+        case reflection::None: /* auto fall through */
+        case reflection::UType:
+        {
+            _error_collector.what = "unsupported type";
+
+            lua_pop( L,1 );
+            return -1;
+        }break;
+        case reflection::Bool:
+        {
+            bool bool_val = lua_toboolean( L,index + 1 );
+            _fbb.AddElement<uint8_t >( off, bool_val,0 );
+        }break;
+        case reflection::Byte:
+        {
+        }break;
+        case reflection::UByte:
+        {
+        }break;
+        case reflection::Short:
+        {
+        }break;
+        case reflection::UShort:
+        {
+        }break;
+        case reflection::Int:
+        {
+        }break;
+        case reflection::UInt:
+        {
+        }break;
+        case reflection::Long:
+        {
+        }break;
+        case reflection::ULong:
+        {
+        }break;
+        case reflection::Float:
+        {
+        }break;
+        case reflection::Double:
+        {
+        }break;
+        case reflection::String:
+        {
+        }break;
+        case reflection::Vector:
+        {
+        }break;
+        case reflection::Obj: /* table or struct */
+        {
+            assert( false ); /* should call encode_object_field */
+        }break;
+        case reflection::Union:
+        {
+        }break;
+    }
+
+    return 0;
+}
+
+/* encode into a flatbuffers object( struct or table ) */
+int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
+                lua_State *L,const struct sequence &seq,int index )
+{
+    for ( auto nested_itr = seq.nested.begin();nested_itr != seq.nested.end();nested_itr ++ )
+    {
+        const auto field = (*nested_itr).field; //reflection::Field
+        assert( (*nested_itr).object && field );
+
+        flatbuffers::uoffset_t nested_offset = 0;
+        int r = encode_object_field( nested_offset,L,field,index,&(*nested_itr) );
+        if ( r > 0 )
+        {
+
+        }
+        else if ( 0 == r ) continue;
+        else
+        {
+            _error_collector.backtrace.push( field->name()->c_str() );
+            return -1;
         }
     }
+
+    for ( auto scalar_itr = seq.scalar.begin();scalar_itr != seq.scalar.end();scalar_itr ++ )
+    {
+        const auto field = *scalar_itr; //reflection::Field
+        int r = encode_scalar_field( L,field,index );
+        if ( r < 0 )
+        {
+            _error_collector.backtrace.push( field->name()->c_str() );
+            return -1;
+        }
+    }
+
     return 0;
 }
 
 int lflatbuffers::encode( lua_State *L,
     const char *schema,const char *object,int index )
 {
-    schema_map::iterator itr = _bfbs_schema.find( schema );
-    if ( itr == _bfbs_schema.end() )
+    schema_map::iterator sch_itr = _schema.find( schema );
+    if ( sch_itr == _schema.end() )
     {
         _error_collector.what = "no such schema";
         return -1;
     }
 
-    // reflection::Schema
-    const auto *_schema = reflection::GetSchema( itr->second.c_str() );
-    assert( schema );
-
-    // reflection::Object
-    const auto *_object = _schema->objects()->LookupByKey( object );
-    if ( !_object )
+    sequence_map::iterator seq_itr = (sch_itr->second).find( object );
+    if ( seq_itr == (sch_itr->second).end() )
     {
         _error_collector.what = std::string("no such object(")
             + object + ") at schema(" + schema + ").";
@@ -243,7 +419,7 @@ int lflatbuffers::encode( lua_State *L,
     _fbb.Clear();
 
     flatbuffers::uoffset_t offset;
-    if ( encode_object( offset,L,_schema,_object,index ) <  0 )
+    if ( encode_object( offset,L,seq_itr->second,index ) <  0 )
     {
         _error_collector.schema = schema;
         return -1;
