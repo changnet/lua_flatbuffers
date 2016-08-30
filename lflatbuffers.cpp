@@ -208,55 +208,8 @@ int lflatbuffers::encode_object_field( flatbuffers::uoffset_t &offset,lua_State 
         return 0; /* optional field */
     }
 
-    uint16_t off = field->offset();
     switch ( field->type()->base_type() )
     {
-        case reflection::None: /* auto fall through */
-        case reflection::UType:
-        {
-            _error_collector.what = "unsupported type";
-
-            lua_pop( L,1 );
-            return -1;
-        }break;
-        case reflection::Bool:
-        {
-            bool bool_val = lua_toboolean( L,index + 1 );
-            _fbb.AddElement<uint8_t >( off, bool_val,0 );
-        }break;
-        case reflection::Byte:
-        {
-        }break;
-        case reflection::UByte:
-        {
-        }break;
-        case reflection::Short:
-        {
-        }break;
-        case reflection::UShort:
-        {
-        }break;
-        case reflection::Int:
-        {
-        }break;
-        case reflection::UInt:
-        {
-        }break;
-        case reflection::Long:
-        {
-        }break;
-        case reflection::ULong:
-        {
-        }break;
-        case reflection::Float:
-        {
-        }break;
-        case reflection::Double:
-        {
-        }break;
-        case reflection::String:
-        {
-        }break;
         case reflection::Vector:
         {
         }break;
@@ -269,9 +222,7 @@ int lflatbuffers::encode_object_field( flatbuffers::uoffset_t &offset,lua_State 
                 return -1;
             }
         }break;
-        case reflection::Union:
-        {
-        }break;
+        default: assert( false );break;
     }
 
     return 0;
@@ -362,16 +313,39 @@ int lflatbuffers::encode_scalar_field(
 int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
                 lua_State *L,const struct sequence &seq,int index )
 {
+#define ENCODE_SCALAR()   \
+    do{\
+        for ( auto scalar_itr = seq.scalar.begin();scalar_itr != seq.scalar.end();scalar_itr ++ )\
+        {\
+            const auto field = *scalar_itr;\
+            int r = encode_scalar_field( L,field,index );\
+            if ( r < 0 )\
+            {\
+                _error_collector.backtrace.push( field->name()->c_str() );\
+                return -1;\
+            }\
+        }\
+    }while(0)
+
+    if ( seq.object->is_struct() )
+    {
+        _fbb.StartStruct( seq.object->minalign() );
+        ENCODE_SCALAR();
+        return _fbb.EndStruct();
+    }
+
+    std::vector< std::pair<uint16_t,flatbuffers::uoffset_t> > nested_offset;
     for ( auto nested_itr = seq.nested.begin();nested_itr != seq.nested.end();nested_itr ++ )
     {
         const auto field = (*nested_itr).field; //reflection::Field
         assert( (*nested_itr).object && field );
 
-        flatbuffers::uoffset_t nested_offset = 0;
-        int r = encode_object_field( nested_offset,L,field,index,&(*nested_itr) );
+        flatbuffers::uoffset_t one_nested_offset = 0;
+        int r = encode_object_field( one_nested_offset,L,field,index,&(*nested_itr) );
         if ( r > 0 )
         {
-
+            nested_offset.push_back(
+                std::make_pair( field->offset(),one_nested_offset) );
         }
         else if ( 0 == r ) continue;
         else
@@ -381,18 +355,17 @@ int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
         }
     }
 
-    for ( auto scalar_itr = seq.scalar.begin();scalar_itr != seq.scalar.end();scalar_itr ++ )
+    flatbuffers::uoffset_t start = _fbb.StartTable();
+    ENCODE_SCALAR();
+
+    for ( auto itr = nested_offset.begin();itr != nested_offset.end();itr++ )
     {
-        const auto field = *scalar_itr; //reflection::Field
-        int r = encode_scalar_field( L,field,index );
-        if ( r < 0 )
-        {
-            _error_collector.backtrace.push( field->name()->c_str() );
-            return -1;
-        }
+        _fbb.AddOffset( itr->first,flatbuffers::Offset<void>( itr->second) );
     }
 
-    return 0;
+    return _fbb.EndTable( start,seq.object->fields()->size() );
+
+#undef ENCODE_SCALAR
 }
 
 int lflatbuffers::encode( lua_State *L,
