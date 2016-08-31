@@ -28,3 +28,4 @@ endif()
 1. include other schema test
 2. namespace ?
 3. default value not encode but decode
+4. Union and enum test

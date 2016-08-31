@@ -36,8 +36,8 @@ private:
     {
         const reflection::Field* field;
         const reflection::Object *object;
-        std::vector< struct sequence > nested;/* table,vector */
-        std::vector< const reflection::Field* > scalar;/* struct,string,int ... */
+        std::vector< struct sequence > nested;/* table,vector,struct */
+        std::vector< const reflection::Field* > scalar;/* string,int ... */
 
         sequence() : field(NULL),object(NULL) {}
     };
@@ -49,12 +49,12 @@ private:
         const char *schema_name,const reflection::Schema *schema );
     void make_object_sequence( const reflection::Schema *schema,
             struct sequence &seq,const reflection::Object *obj );
+    int encode_struct(
+        uint8_t *buffer,lua_State *L,const struct sequence &seq,int index );
+    int encode_table( flatbuffers::uoffset_t &offset,
+                    lua_State *L,const struct sequence &seq,int index );
     int encode_object( flatbuffers::uoffset_t &offset,
                     lua_State *L,const struct sequence &seq,int index );
-    int encode_object_field( flatbuffers::uoffset_t &offset,lua_State *L,
-        const reflection::Field *field,int index,const struct sequence *seq );
-    int encode_scalar_field(
-        lua_State *L,const reflection::Field *field,int index );
 private:
     flatbuffers::FlatBufferBuilder _fbb;
     /* reflection::GetSchema cast string buffer to reflection::Schema

@@ -104,6 +104,12 @@ const char *lflatbuffers::last_error()
     return _error_collector.what.c_str();
 }
 
+/* flatbuffers has to be built in post-order,so we need to iterate schema to
+ * mark which field to be built first.to be more convenient,we put all
+ * object(include struct,not just table those have offset table) into nested,
+ * so we don't need to pass schema as parameter or call Get to get a object
+ * pointer.
+ */
 void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
     struct sequence &seq,const reflection::Object *object )
 {
@@ -140,6 +146,7 @@ void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
                 }
             }break;
             /* those type fall through */
+            case reflection::UType:
             case reflection::Byte:
             case reflection::Bool:
             case reflection::UByte:
@@ -157,9 +164,7 @@ void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
                 seq.scalar.push_back( *field_itr );
             }break;
             case reflection::None:
-            case reflection::UType:
             {
-                /* what is UType ? */
                 assert( false );
             }break;
         }
@@ -188,151 +193,151 @@ void lflatbuffers::make_build_sequence(
     }
 }
 
-/* encode a field
- * return value:-1:error,0:optional field,1:success
- */
-int lflatbuffers::encode_object_field( flatbuffers::uoffset_t &offset,lua_State *L,
-        const reflection::Field *field,int index,const struct sequence *seq )
+int lflatbuffers::encode_struct(
+    uint8_t *buffer,lua_State *L,const struct sequence &seq,int index )
 {
-    lua_getfield( L,index,field->name()->c_str() );
-    if ( lua_isnil( L,index + 1 ) )
-    {
-        if ( field->required() )
-        {
-            _error_collector.what = "missing required field";
-            _error_collector.backtrace.push( field->name()->c_str() );
-            return -1;
-        }
-
-        lua_pop( L,1 );
-        return 0; /* optional field */
-    }
-
-    switch ( field->type()->base_type() )
-    {
-        case reflection::Vector:
-        {
-        }break;
-        case reflection::Obj: /* table or struct */
-        {
-            assert( seq );
-            if ( encode_object( offset,L,*seq,index + 1 ) < 0 )
-            {
-                lua_pop( L,1 );
-                return -1;
-            }
-        }break;
-        default: assert( false );break;
-    }
-
-    return 0;
-}
-
-int lflatbuffers::encode_scalar_field(
-    lua_State *L,const reflection::Field *field,int index )
-{
-    lua_getfield( L,index,field->name()->c_str() );
-    if ( lua_isnil( L,index + 1 ) )
-    {
-        if ( field->required() )
-        {
-            _error_collector.what = "missing required field";
-            _error_collector.backtrace.push( field->name()->c_str() );
-            return -1;
-        }
-
-        lua_pop( L,1 );
-        return 0; /* optional field */
-    }
-
-    uint16_t off = field->offset();
-    switch ( field->type()->base_type() )
-    {
-        case reflection::None: /* auto fall through */
-        case reflection::UType:
-        {
-            _error_collector.what = "unsupported type";
-
-            lua_pop( L,1 );
-            return -1;
-        }break;
-        case reflection::Bool:
-        {
-            bool bool_val = lua_toboolean( L,index + 1 );
-            _fbb.AddElement<uint8_t >( off, bool_val,0 );
-        }break;
-        case reflection::Byte:
-        {
-        }break;
-        case reflection::UByte:
-        {
-        }break;
-        case reflection::Short:
-        {
-        }break;
-        case reflection::UShort:
-        {
-        }break;
-        case reflection::Int:
-        {
-        }break;
-        case reflection::UInt:
-        {
-        }break;
-        case reflection::Long:
-        {
-        }break;
-        case reflection::ULong:
-        {
-        }break;
-        case reflection::Float:
-        {
-        }break;
-        case reflection::Double:
-        {
-        }break;
-        case reflection::String:
-        {
-        }break;
-        case reflection::Vector:
-        {
-        }break;
-        case reflection::Obj: /* table or struct */
-        {
-            assert( false ); /* should call encode_object_field */
-        }break;
-        case reflection::Union:
-        {
-        }break;
-    }
-
-    return 0;
-}
-
-/* encode into a flatbuffers object( struct or table ) */
-int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
-                lua_State *L,const struct sequence &seq,int index )
-{
-#define ENCODE_SCALAR()   \
+#define CHECK_FIELD()    \
     do{\
-        for ( auto scalar_itr = seq.scalar.begin();scalar_itr != seq.scalar.end();scalar_itr ++ )\
+        lua_getfield( L,index,field->name()->c_str() );\
+        if ( lua_isnil( L,index + 1 ) )\
         {\
-            const auto field = *scalar_itr;\
-            int r = encode_scalar_field( L,field,index );\
-            if ( r < 0 )\
-            {\
-                _error_collector.backtrace.push( field->name()->c_str() );\
-                return -1;\
-            }\
+            _error_collector.what = "missing required field";\
+            _error_collector.backtrace.push( field->name()->c_str() );\
+            lua_pop( L,1 );\
+            return -1;\
         }\
     }while(0)
 
-    if ( seq.object->is_struct() )
+#define SET_INTEGER(T)   \
+    do{\
+        if ( lua_isnumber( L,index + 1 ) )\
+        {\
+            _error_collector.what = std::string( "expect number,got" )\
+                + lua_typename( L,lua_type(L,index+1) );\
+            _error_collector.backtrace.push( field->name()->c_str() );\
+            lua_pop( L,1 );\
+            return -1;\
+        }\
+        int64_t val = lua_tointeger( L,index + 1 );\
+        flatbuffers::WriteScalar(data, static_cast<T>(val));\
+    }while(0)
+
+#define SET_NUMBER(T)   \
+    do{\
+        if ( lua_isnumber( L,index + 1 ) )\
+        {\
+            _error_collector.what = std::string( "expect number,got" )\
+                + lua_typename( L,lua_type(L,index+1) );\
+            _error_collector.backtrace.push( field->name()->c_str() );\
+            lua_pop( L,1 );\
+            return -1;\
+        }\
+        double val = lua_tonumber( L,index + 1 );\
+        flatbuffers::WriteScalar(data, static_cast<T>(val));\
+    }while(0)
+
+    assert( seq.object->is_struct() );
+    for ( auto nested_itr = seq.nested.begin();nested_itr != seq.nested.end();nested_itr ++ )
     {
-        _fbb.StartStruct( seq.object->minalign() );
-        ENCODE_SCALAR();
-        return _fbb.EndStruct();
+        const auto field = nested_itr->field; //reflection::Field
+        assert( nested_itr->object && nested_itr->object->is_struct() );
+
+        CHECK_FIELD();
+        int r = encode_struct( buffer + field->offset(),L,*nested_itr,index + 1 );
+        lua_pop( L,1 );
+
+        if ( r < 0 ) return -1;
     }
+
+    assert( lua_gettop( L ) == index );
+
+    for ( auto scalar_itr = seq.scalar.begin();scalar_itr != seq.scalar.end();scalar_itr ++ )
+    {
+        const auto field = *scalar_itr;
+
+        CHECK_FIELD();
+
+        uint8_t *data = buffer + field->offset();
+        switch ( field->type()->base_type() )
+        {
+            case reflection::None: /* auto fall through */
+            case reflection::String:
+            case reflection::Vector:
+            case reflection::Union:
+            case reflection::Obj: /* table or struct */
+            {
+                assert( false ); /* struct never contain those types */
+            }break;
+            case reflection::Bool:
+            {
+                bool val = lua_toboolean( L,index + 1 );
+                flatbuffers::WriteScalar( data, static_cast<uint8_t>(val) );
+            }break;
+            case reflection::UType: SET_INTEGER(uint8_t );break;
+            case reflection::Byte:  SET_INTEGER(int8_t  );break;
+            case reflection::UByte: SET_INTEGER(uint8_t );break;
+            case reflection::Short: SET_INTEGER(int16_t );break;
+            case reflection::UShort:SET_INTEGER(uint16_t);break;
+            case reflection::Int:   SET_INTEGER(int32_t );break;
+            case reflection::UInt:  SET_INTEGER(uint32_t);break;
+            case reflection::Long:  SET_INTEGER(int64_t );break;
+            case reflection::ULong: SET_INTEGER(uint64_t);break;
+            case reflection::Float: SET_NUMBER (float   );break;
+            case reflection::Double:SET_NUMBER (double  );break;
+        }
+
+        lua_pop( L,1 ); /* pop the value which push at CHECK_FIELD */
+    }
+
+    return 0;
+
+#undef SET_INTEGER
+#undef SET_NUMBER
+#undef CHECK_FIELD
+}
+
+int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
+                lua_State *L,const struct sequence &seq,int index )
+{
+#define CHECK_FIELD()   \
+    do{\
+        lua_getfield( L,index,field->name()->c_str() );\
+        if ( lua_isnil( L,index + 1 ) )\
+        {\
+            lua_pop( L,1 );\
+            continue; /* all field in table is optional */\
+        }\
+    }while(0)
+
+#define ADD_INTEGER(T)   \
+    do{\
+        if ( lua_isnumber( L,index + 1 ) )\
+        {\
+            _error_collector.what = std::string( "expect number,got" )\
+                + lua_typename( L,lua_type(L,index+1) );\
+            _error_collector.backtrace.push( field->name()->c_str() );\
+            lua_pop( L,1 );\
+            return -1;\
+        }\
+        int64_t val = lua_tointeger( L,index + 1 );\
+        _fbb.AddElement<T>(off, val,0);\
+    }while(0)
+
+#define ADD_NUMBER(T)   \
+    do{\
+        if ( lua_isnumber( L,index + 1 ) )\
+        {\
+            _error_collector.what = std::string( "expect number,got" )\
+                + lua_typename( L,lua_type(L,index+1) );\
+            _error_collector.backtrace.push( field->name()->c_str() );\
+            lua_pop( L,1 );\
+            return -1;\
+        }\
+        double val = lua_tonumber( L,index + 1 );\
+        _fbb.AddElement<T>(off, val,0 );\
+    }while(0)
+
+    assert( !seq.object->is_struct() );
 
     std::vector< std::pair<uint16_t,flatbuffers::uoffset_t> > nested_offset;
     for ( auto nested_itr = seq.nested.begin();nested_itr != seq.nested.end();nested_itr ++ )
@@ -340,32 +345,96 @@ int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
         const auto field = (*nested_itr).field; //reflection::Field
         assert( (*nested_itr).object && field );
 
+        CHECK_FIELD();
         flatbuffers::uoffset_t one_nested_offset = 0;
-        int r = encode_object_field( one_nested_offset,L,field,index,&(*nested_itr) );
-        if ( r > 0 )
-        {
-            nested_offset.push_back(
-                std::make_pair( field->offset(),one_nested_offset) );
-        }
-        else if ( 0 == r ) continue;
-        else
+        int r = encode_object( one_nested_offset,L,*nested_itr,index );
+
+        lua_pop( L,1 );
+        if ( r < 0 )
         {
             _error_collector.backtrace.push( field->name()->c_str() );
             return -1;
         }
+        nested_offset.push_back(
+            std::make_pair( field->offset(),one_nested_offset) );
     }
 
     flatbuffers::uoffset_t start = _fbb.StartTable();
-    ENCODE_SCALAR();
+    for ( auto scalar_itr = seq.scalar.begin();scalar_itr != seq.scalar.end();scalar_itr ++ )
+    {
+        const auto field = *scalar_itr;
+
+        CHECK_FIELD();
+
+        uint16_t off = field->offset();
+        switch ( field->type()->base_type() )
+        {
+            /* object shouble be handled at nested */
+            case reflection::Obj: assert( false );break;
+            case reflection::None: assert( false );break;
+            case reflection::String:
+            {
+            }break;
+            case reflection::Vector:
+            {
+            }break;
+            case reflection::Union:
+            {
+            }break;
+            case reflection::Bool:
+            {
+                bool bool_val = lua_toboolean( L,index + 1 );
+                _fbb.AddElement<uint8_t>( off, bool_val,0 );
+            }break;
+            case reflection::UType: ADD_INTEGER(uint8_t );break;
+            case reflection::Byte:  ADD_INTEGER(int8_t  );break;
+            case reflection::UByte: ADD_INTEGER(uint8_t );break;
+            case reflection::Short: ADD_INTEGER(int16_t );break;
+            case reflection::UShort:ADD_INTEGER(uint16_t);break;
+            case reflection::Int:   ADD_INTEGER(int32_t );break;
+            case reflection::UInt:  ADD_INTEGER(uint32_t);break;
+            case reflection::Long:  ADD_INTEGER(int64_t );break;
+            case reflection::ULong: ADD_INTEGER(uint64_t);break;
+            case reflection::Float: ADD_NUMBER (float   );break;
+            case reflection::Double:ADD_NUMBER (double  );break;
+        }
+
+        lua_pop( L,1 ); /* pop the value which push at CHECK_FIELD */
+    }
 
     for ( auto itr = nested_offset.begin();itr != nested_offset.end();itr++ )
     {
-        _fbb.AddOffset( itr->first,flatbuffers::Offset<void>( itr->second) );
+        _fbb.AddOffset( itr->first,flatbuffers::Offset<void>( itr->second ) );
     }
 
-    return _fbb.EndTable( start,seq.object->fields()->size() );
+    offset = _fbb.EndTable( start,seq.object->fields()->size() );
 
-#undef ENCODE_SCALAR
+    return 0;
+
+#undef ADD_INTEGER
+#undef ADD_NUMBER
+#undef CHECK_FIELD
+}
+/* encode into a flatbuffers object( struct or table ) */
+int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
+                lua_State *L,const struct sequence &seq,int index )
+{
+
+    if ( seq.object->is_struct() )
+    {
+        /* "structs" are flat structures that do not have an offset table
+         * always have all members present.so we "new" a flat buffer at
+         * FlatBufferBuilder,then fill every member.
+         */
+        _fbb.StartStruct( seq.object->minalign() );
+        uint8_t* buffer = _fbb.ReserveElements( seq.object->bytesize(), 1 );
+        encode_struct( buffer,L,seq,index );
+        offset =  _fbb.EndStruct();
+
+        return 0;
+    }
+
+    return 0;
 }
 
 int lflatbuffers::encode( lua_State *L,

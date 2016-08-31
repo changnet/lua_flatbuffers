@@ -1,4 +1,6 @@
-table element
+#include "monter_test.fbs"
+
+struct scalar_types
 {
 	int8_min:byte;
 	int8_max:byte;
@@ -22,13 +24,28 @@ table element
 
 	double_min:double;
 	double_max:double;
+}
+
+Union
+
+struct test_struct
+{
+	nested_struct:scalar_types;
+}
+
+table test_table
+{
+	scalar:scalar_types;
 	str:string;
 }
 
 table test
 {
-	el:[element];
+	test1:test_struct;
+	test2:test_table;
 }
+
+
 
 root_type test;
 
