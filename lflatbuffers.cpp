@@ -106,9 +106,9 @@ const char *lflatbuffers::last_error()
 
 /* flatbuffers has to be built in post-order,so we need to iterate schema to
  * mark which field to be built first.to be more convenient,we put all
- * object(include struct,not just table those have offset table) into nested,
- * so we don't need to pass schema as parameter or call Get to get a object
- * pointer.
+ * object(include struct,not just table、string ... those have offset table)
+ * into nested,so we don't need to pass schema as parameter or call Get to
+ * get a object pointer.
  */
 void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
     struct sequence &seq,const reflection::Object *object )
@@ -118,7 +118,7 @@ void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
         struct sequence sub_seq;\
         sub_seq.field = *field_itr;\
         sub_seq.object = sub_object;\
-        make_object_sequence( schema,sub_seq,sub_object );\
+        if (sub_object) make_object_sequence( schema,sub_seq,sub_object );\
         seq.nested.push_back( sub_seq );\
     }while(0)
 
@@ -135,15 +135,18 @@ void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
             }break;
             case reflection::Vector:
             {
+                const reflection::Object *sub_object = NULL;
                 if ( reflection::Obj == type->element() )
                 {
-                    auto *sub_object = schema->objects()->Get( type->index() );
-                    PUSH_SEQUENCE();
+                    sub_object = schema->objects()->Get( type->index() );
                 }
-                else
-                {
-                    seq.scalar.push_back( *field_itr );
-                }
+                PUSH_SEQUENCE();
+            }break;
+            case reflection::String:
+            case reflection::Union:
+            {
+                const reflection::Object *sub_object = NULL;
+                PUSH_SEQUENCE();
             }break;
             /* those type fall through */
             case reflection::UType:
@@ -158,15 +161,10 @@ void lflatbuffers::make_object_sequence( const reflection::Schema *schema,
             case reflection::ULong:
             case reflection::Float:
             case reflection::Double:
-            case reflection::String:
-            case reflection::Union:
             {
                 seq.scalar.push_back( *field_itr );
             }break;
-            case reflection::None:
-            {
-                assert( false );
-            }break;
+            case reflection::None:assert( false );break;
         }
     }
 
@@ -210,9 +208,9 @@ int lflatbuffers::encode_struct(
 
 #define SET_INTEGER(T)   \
     do{\
-        if ( lua_isnumber( L,index + 1 ) )\
+        if ( !lua_isnumber( L,index + 1 ) )\
         {\
-            _error_collector.what = std::string( "expect number,got" )\
+            _error_collector.what = std::string( "expect number,got " )\
                 + lua_typename( L,lua_type(L,index+1) );\
             _error_collector.backtrace.push( field->name()->c_str() );\
             lua_pop( L,1 );\
@@ -224,9 +222,9 @@ int lflatbuffers::encode_struct(
 
 #define SET_NUMBER(T)   \
     do{\
-        if ( lua_isnumber( L,index + 1 ) )\
+        if ( !lua_isnumber( L,index + 1 ) )\
         {\
-            _error_collector.what = std::string( "expect number,got" )\
+            _error_collector.what = std::string( "expect number,got " )\
                 + lua_typename( L,lua_type(L,index+1) );\
             _error_collector.backtrace.push( field->name()->c_str() );\
             lua_pop( L,1 );\
@@ -311,9 +309,9 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
 
 #define ADD_INTEGER(T)   \
     do{\
-        if ( lua_isnumber( L,index + 1 ) )\
+        if ( !lua_isnumber( L,index + 1 ) )\
         {\
-            _error_collector.what = std::string( "expect number,got" )\
+            _error_collector.what = std::string( "expect number,got " )\
                 + lua_typename( L,lua_type(L,index+1) );\
             _error_collector.backtrace.push( field->name()->c_str() );\
             lua_pop( L,1 );\
@@ -325,9 +323,9 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
 
 #define ADD_NUMBER(T)   \
     do{\
-        if ( lua_isnumber( L,index + 1 ) )\
+        if ( !lua_isnumber( L,index + 1 ) )\
         {\
-            _error_collector.what = std::string( "expect number,got" )\
+            _error_collector.what = std::string( "expect number,got " )\
                 + lua_typename( L,lua_type(L,index+1) );\
             _error_collector.backtrace.push( field->name()->c_str() );\
             lua_pop( L,1 );\
@@ -343,18 +341,48 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
     for ( auto nested_itr = seq.nested.begin();nested_itr != seq.nested.end();nested_itr ++ )
     {
         const auto field = (*nested_itr).field; //reflection::Field
-        assert( (*nested_itr).object && field );
+        assert( field );
 
         CHECK_FIELD();
         flatbuffers::uoffset_t one_nested_offset = 0;
-        int r = encode_object( one_nested_offset,L,*nested_itr,index );
-
-        lua_pop( L,1 );
-        if ( r < 0 )
+        switch ( field->type()->base_type() )
         {
-            _error_collector.backtrace.push( field->name()->c_str() );
-            return -1;
+            case reflection::String:
+            {
+                if ( !lua_isstring( L,index + 1 ) )
+                {
+                    _error_collector.what = std::string( "expect string,got " )
+                        + lua_typename( L,lua_type(L,index+1) );
+                    _error_collector.backtrace.push( field->name()->c_str() );
+                    lua_pop( L,1 );
+                    return -1;
+                }
+
+                size_t len = 0;
+                const char *str = lua_tolstring( L,index + 1,&len );
+                one_nested_offset = _fbb.CreateString( str,len ).o;
+            }break;
+            case reflection::Vector:
+            {
+                /* element type could be scalar、talbe、struct、string */
+            }break;
+            case reflection::Union:
+            {
+
+            }break;
+            case reflection::Obj:
+            {
+                if ( encode_object( one_nested_offset,L,*nested_itr,index + 1 ) < 0 )
+                {
+                    _error_collector.backtrace.push( field->name()->c_str() );
+
+                    lua_pop( L,1 );
+                    return -1;
+                }
+            }break;
+            default : assert( false ); /* other types handle at scalar */
         }
+
         nested_offset.push_back(
             std::make_pair( field->offset(),one_nested_offset) );
     }

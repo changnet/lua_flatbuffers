@@ -36,8 +36,8 @@ private:
     {
         const reflection::Field* field;
         const reflection::Object *object;
-        std::vector< struct sequence > nested;/* table,vector,struct */
-        std::vector< const reflection::Field* > scalar;/* string,int ... */
+        std::vector< struct sequence > nested;/* table,vector,struct,string */
+        std::vector< const reflection::Field* > scalar;/* int ... */
 
         sequence() : field(NULL),object(NULL) {}
     };

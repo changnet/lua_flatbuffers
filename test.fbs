@@ -1,4 +1,4 @@
-#include "monter_test.fbs"
+include "monster_test.fbs";
 
 struct scalar_types
 {
@@ -26,26 +26,45 @@ struct scalar_types
 	double_max:double;
 }
 
-Union
-
 struct test_struct
 {
 	nested_struct:scalar_types;
 }
 
+table vec
+{
+	x:int;
+	y:int;
+	z:int;
+}
+
+struct stc
+{
+	x:int;
+	y:int;
+	z:int;
+}
+
+// vector of union types not supported (wrap in table first)
 table test_table
 {
 	scalar:scalar_types;
 	str:string;
+	utest:MyGame.Example.Any;
+	vstr:[string];
+	vtable:[vec];
+	vstruct:[stc];
 }
+
+// only tables can be union elements
+union mix_uion { test_table }
 
 table test
 {
 	test1:test_struct;
 	test2:test_table;
+	mix_uions:mix_uion;
 }
-
-
 
 root_type test;
 
