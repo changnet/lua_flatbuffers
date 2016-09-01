@@ -205,6 +205,66 @@ int lflatbuffers::encode_struct(uint8_t *buffer,
 
 }
 
+int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
+    const reflection::Schema *schema,const reflection::Field *field,int index )
+{
+#define UNCHECK(TYPE)
+#define TYPE_CHECK(TYPE)    \
+    do{\
+        if ( !lua_is##TYPE( L,-1 ) )\
+        {\
+            ERROR_WHAT( "vector element expect "#TYPE",got " );\
+            ERROR_APPEND( lua_typename(L, lua_type(L, -1)) );\
+            lua_pop(L,1); return -1;\
+        }\
+    }while(0)
+
+#define CREATE_VECTOR(T,TYPE,TC,CF)    \
+    do{\
+        std::vector<T> vt;\
+        lua_pushnil( L );\
+        while( lua_next( L,index ) )\
+        {\
+            vt.push_back( static_cast<T>(lua_to##TYPE(L,-1)) );\
+            lua_pop( L,1 );\
+        }\
+        if ( !vt.empty() ) offset = _fbb.CF( vt ).o;\
+    }while(0)
+
+#define CREATE_BOOLEAN_VECTOR(T)    \
+    CREATE_VECTOR(T,boolean,UNCHECK,CreateVector)
+#define CREATE_NUMBER_VECTOR(T)    \
+    CREATE_VECTOR(T,integer,TYPE_CHECK,CreateVector)
+#define CREATE_STRING_VECTOR(T) \
+    CREATE_VECTOR(T,string,TYPE_CHECK,CreateVectorOfStrings)
+
+    /* element type could be scalar、table、struct、string */
+    switch( field->type()->element() )
+    {
+        case reflection::Bool:  CREATE_BOOLEAN_VECTOR(bool);break;
+        case reflection::String:CREATE_STRING_VECTOR(std::string);break;
+        case reflection::UType: CREATE_NUMBER_VECTOR(uint8_t );break;
+        case reflection::Byte:  CREATE_NUMBER_VECTOR(int8_t  );break;
+        case reflection::UByte: CREATE_NUMBER_VECTOR(uint8_t );break;
+        case reflection::Short: CREATE_NUMBER_VECTOR(int16_t );break;
+        case reflection::UShort:CREATE_NUMBER_VECTOR(uint16_t);break;
+        case reflection::Int:   CREATE_NUMBER_VECTOR(int32_t );break;
+        case reflection::UInt:  CREATE_NUMBER_VECTOR(uint32_t);break;
+        case reflection::Long:  CREATE_NUMBER_VECTOR(int64_t );break;
+        case reflection::ULong: CREATE_NUMBER_VECTOR(uint64_t);break;
+        case reflection::Float: CREATE_NUMBER_VECTOR(float   );break;
+        case reflection::Double:CREATE_NUMBER_VECTOR(double  );break;
+    }
+    return 0;
+
+#undef UNCHECK
+#undef TYPE_CHECK
+#undef CREATE_VECTOR
+#undef CREATE_BOOLEAN_VECTOR
+#undef CREATE_NUMBER_VECTOR
+#undef CREATE_STRING_VECTOR
+}
+
 int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
@@ -218,20 +278,6 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
         }\
     }while(0)
 
-#define ADD_INTEGER(T)   \
-    do{\
-        if ( !lua_isnumber( L,index + 1 ) )\
-        {\
-            ERROR_WHAT( "expect number,got " );\
-            ERROR_APPEND( lua_typename( L,lua_type(L,index + 1) ) );\
-            ERROR_TRACE( field->name()->c_str() );\
-            lua_pop( L,1 );\
-            return -1;\
-        }\
-        int64_t val = lua_tointeger( L,index + 1 );\
-        _fbb.AddElement<T>(off, val,0);\
-    }while(0)
-
 #define ADD_NUMBER(T)   \
     do{\
         if ( !lua_isnumber( L,index + 1 ) )\
@@ -242,8 +288,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             lua_pop( L,1 );\
             return -1;\
         }\
-        double val = lua_tonumber( L,index + 1 );\
-        _fbb.AddElement<T>(off, val,0 );\
+        _fbb.AddElement<T>(off, static_cast<T>(lua_tonumber( L,index + 1 ) ),0 );\
     }while(0)
 
     assert( !object->is_struct() ); /* call encode struct insted */
@@ -288,7 +333,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             }break;
             case reflection::Vector:
             {
-                /* element type could be scalar、talbe、struct、string */
+                encode_vector( one_nested_offset,schema,field,index + 1 );
             }break;
             case reflection::Union:
             {
@@ -341,17 +386,17 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                 bool bool_val = lua_toboolean( L,index + 1 );
                 _fbb.AddElement<uint8_t>( off, bool_val,0 );
             }break;
-            case reflection::UType: ADD_INTEGER(uint8_t );break;
-            case reflection::Byte:  ADD_INTEGER(int8_t  );break;
-            case reflection::UByte: ADD_INTEGER(uint8_t );break;
-            case reflection::Short: ADD_INTEGER(int16_t );break;
-            case reflection::UShort:ADD_INTEGER(uint16_t);break;
-            case reflection::Int:   ADD_INTEGER(int32_t );break;
-            case reflection::UInt:  ADD_INTEGER(uint32_t);break;
-            case reflection::Long:  ADD_INTEGER(int64_t );break;
-            case reflection::ULong: ADD_INTEGER(uint64_t);break;
-            case reflection::Float: ADD_NUMBER (float   );break;
-            case reflection::Double:ADD_NUMBER (double  );break;
+            case reflection::UType: ADD_NUMBER(uint8_t );break;
+            case reflection::Byte:  ADD_NUMBER(int8_t  );break;
+            case reflection::UByte: ADD_NUMBER(uint8_t );break;
+            case reflection::Short: ADD_NUMBER(int16_t );break;
+            case reflection::UShort:ADD_NUMBER(uint16_t);break;
+            case reflection::Int:   ADD_NUMBER(int32_t );break;
+            case reflection::UInt:  ADD_NUMBER(uint32_t);break;
+            case reflection::Long:  ADD_NUMBER(int64_t );break;
+            case reflection::ULong: ADD_NUMBER(uint64_t);break;
+            case reflection::Float: ADD_NUMBER(float   );break;
+            case reflection::Double:ADD_NUMBER(double  );break;
         }
 
         lua_pop( L,1 ); /* pop the value which push at CHECK_FIELD */

@@ -33,6 +33,8 @@ private:
         std::vector< std::string > backtrace;
     } _error_collector;
 
+    int encode_vector( flatbuffers::uoffset_t &offset,
+        const reflection::Schema *schema,const reflection::Field *field,int index );
     int encode_struct(uint8_t *buffer,
         const reflection::Schema *schema,const reflection::Object *object,int index );
     int encode_table( flatbuffers::uoffset_t &offset,
