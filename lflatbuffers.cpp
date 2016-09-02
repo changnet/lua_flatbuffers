@@ -239,7 +239,8 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
     CREATE_VECTOR(T,string,TYPE_CHECK,CreateVectorOfStrings)
 
     /* element type could be scalar、table、struct、string */
-    switch( field->type()->element() )
+    const auto type = field->type();
+    switch( type->element() )
     {
         case reflection::Bool:  CREATE_BOOLEAN_VECTOR(bool);break;
         case reflection::String:CREATE_STRING_VECTOR(std::string);break;
@@ -254,6 +255,16 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
         case reflection::ULong: CREATE_NUMBER_VECTOR(uint64_t);break;
         case reflection::Float: CREATE_NUMBER_VECTOR(float   );break;
         case reflection::Double:CREATE_NUMBER_VECTOR(double  );break;
+        case reflection::Obj:
+        {
+            auto *sub_object = schema->objects()->Get( type->index() );
+            if ( sub_object->is_struct() )
+            {
+                assert( sub_object->bytesize() == field->offset() );
+                uint8_t *buffer = NULL;
+                
+            }
+        }break;
     }
     return 0;
 

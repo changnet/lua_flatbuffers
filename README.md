@@ -1,6 +1,6 @@
 # lua_flatbuffers
 a lua google flatbuffers encode/decode module base on google flatbuffers reflection  
-See more about parson at http://google.github.io/flatbuffers/  
+See more about google flatbuffers at http://google.github.io/flatbuffers/  
 
 FlatBuffers release 1.4.0
 https://github.com/google/flatbuffers/releases/tag/v1.4.0
@@ -29,3 +29,4 @@ endif()
 2. namespace ?
 3. default value not encode but decode
 4. Union and enum test
+5. encode vector length is 0
