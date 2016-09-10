@@ -126,11 +126,63 @@ g++ -std=c++11 -o test_cpp test_cpp.cpp -lflatbuffe
   }
 ```
 
+#### 数组
+把上面的schema文件稍微修改一下：
+```flatbuffers
+table simple_table
+{
+    x:[bool];
+}
+```
+当内容为
+```json
+{x:[true]}
+{x:[true,true]}
+```
+二进制内容分别为:
+```shell
+0c00 0000 0000 0600 0800 0400 0600 0000 0400 0000 0100 0000 0100 0000
+
+0c00 0000 0000 0600 0800 0400 0600 0000 0400 0000 0200 0000 0101 0000
+```
+可以看到，其内容与上面例子不同的是0200 0000 0101 0000，其中0200 0000是一个uoffset_t,
+即一个uint32_t.而0101 0000则是bool(uint8_t)按4bytes对齐后的结果。
+
+分析创建数组的函数
+```cpp
+  uoffset_t EndVector(size_t len) {
+    assert(nested);  // Hit if no corresponding StartVector.
+    nested = false;
+    return PushElement(static_cast<uoffset_t>(len));
+  }
+
+  void StartVector(size_t len, size_t elemsize) {
+    NotNested();
+    nested = true;
+    PreAlign<uoffset_t>(len * elemsize);
+    PreAlign(len * elemsize, elemsize);  // Just in case elemsize > uoffset_t.
+  }
+```
+PreAlign会先按uoffset_t对齐，这样如果数组元素(内存大小，不是值)小于等于uoffset_t时，就OK了，如bool类型。
+但如果是一个自定义的元素(比如一个比较大的table)，PreAlign(len * elemsize, elemsize)就会重新再对齐一次。
+
+从上面的例子可以看出，如果事先不知道数组的长度，创建数组并不容易，因为无法对齐。对于lua中的table，如果想
+当作数组使用，就会有这个问题。
+
+#### 内存对齐
+
+上面的例子中会发现有很多内存对齐的地方，内存对齐有时候不仅会浪费空间，还会增加代码复杂度。而Protocol Buffer却没有要求内存对齐。
+这是因为flatbuffers本身的设计原因。flatbuffers为了追求速度，省去了反序列化的过程。取而代之的是根据vtable地址直接访问字段的值。
+根据地址访问变量！这不就是指针么。没错，flatbuffers就是把它当指针了.flatbuffers源码中大量使用了reinterpret_cast，这意味
+flatbuffers将来自网络的flatbuffers数据直接当作你在内存中创建的对象来使用。但是，你在内存中创建的对象是编译器经过内存对齐处理的，
+所以flatbuffers数据也必须做内存对齐处理。同时你还可以想到，你接收的数据可能是来自不同平台(i686、arm...)，不同的语言(c++、java、swift...).
+不同的平台不同的语言不同的编译器会导致内存对齐都可能不一样。为了让他们统一起来，flatbuffers可是做了很多工作的。
+
 #### 结束语
 上面只是分析一个很简单的例子，其他复杂的内容如内存对齐、vtable共享、table嵌套、数组等一
-下子也说不清楚。如果你感兴趣，就自己去研究源码。下面还有几个注意点：
+下子也说不清楚。如果你感兴趣，就自己去研究源码，下面的参考链接里有分析。下面还有几个注意点：
 * 内存从高往低写，这是因为flatbuffers的结构设计如此，必须先创建子对象(Do this is depth-first order to build up a tree to the root)
-* 小端存储，你用WriteScalar、ReadScalar就不会有太大问题
+* 小端存储，用WriteScalar、ReadScalar就不会有太大问题
 * 存在内存对齐，这个可能会干扰你分析问题
 
 #### 其他参考
