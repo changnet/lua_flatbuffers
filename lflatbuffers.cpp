@@ -257,12 +257,57 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
         case reflection::Double:CREATE_NUMBER_VECTOR(double  );break;
         case reflection::Obj:
         {
+            if ( !lua_istable( L,index ) )
+            {
+                ERROR_WHAT( "vector element expect table,got " );
+                ERROR_APPEND( lua_typename(L, lua_type(L, -1)) );
+                lua_pop(L,1); return -1;
+            }
+
             auto *sub_object = schema->objects()->Get( type->index() );
             if ( sub_object->is_struct() )
             {
                 assert( sub_object->bytesize() == field->offset() );
+
+                /* when create vector,flatbuffers need to know element size and
+                 * vector length to align
+                 */
+                lua_len( L,index );
+                int length = lua_tointeger( L,index + 1 );
+                lua_pop( L,1 );
+
+                if ( length <= 0 ) { lua_pop( L,1 );return 0; }
+
                 uint8_t *buffer = NULL;
-                
+                int32_t bytesize = sub_object->bytesize();
+                offset = _fbb.CreateUninitializedVector( length,bytesize,&buffer );
+
+                /* we use the length operator(lua_len,same as #) to get the array
+                 * length.but we use lua_next insted using key 1...n to get element.
+                 * so if someone want to use talbe as array,just implemente __len.
+                 * please note:even your table's keys are 1..n,lua_next may not get
+                 * it as 1...n.it's out of order,maybe 2,5,4,3...
+                 * however,if you create a array with table.insert,if will be ordered.
+                 */
+                int sub_index = 0;
+                lua_pushnil( L );
+                while ( lua_next( L,index ) )
+                {
+                    uint8_t *sub_buffer = buffer + bytesize*sub_index;
+                    if ( encode_struct( sub_buffer,schema,sub_object,index + 2) < 0 )
+                    {
+                        lua_pop( L,2 );
+                        return -1;
+                    }
+
+                    /* in case table key is not number */
+                    sub_index ++;
+                    if ( sub_index >= length ) { lua_pop( L,1 );break; }
+
+                    lua_pop( L,1 );
+                }
+
+                return 0;
             }
         }break;
     }
