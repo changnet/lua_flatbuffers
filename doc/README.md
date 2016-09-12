@@ -169,6 +169,65 @@ PreAlign会先按uoffset_t对齐，这样如果数组元素(内存大小，不�
 从上面的例子可以看出，如果事先不知道数组的长度，创建数组并不容易，因为无法对齐。对于lua中的table，如果想
 当作数组使用，就会有这个问题。
 
+#### 联合体union
+
+先将一个包含union的简单schema文件以c++编译出来：
+```flatbuffers
+table simple_table { x:[bool]; }
+
+table simple_table2 { y:[bool]; }
+
+union any { simple_table,simple_table2 }
+
+table simple { x:any; }
+```
+```cpp
+enum any {
+  any_NONE = 0,
+  any_simple_table = 1,
+  any_simple_table2 = 2,
+  any_MIN = any_NONE,
+  any_MAX = any_simple_table2
+};
+
+inline const char **EnumNamesany() {
+  static const char *names[] = { "NONE", "simple_table", "simple_table2", nullptr };
+  return names;
+}
+
+inline flatbuffers::Offset<simple> Createsimple(flatbuffers::FlatBufferBuilder &_fbb,
+    any x_type = any_NONE,
+    flatbuffers::Offset<void> x = 0) {
+  simpleBuilder builder_(_fbb);
+  builder_.add_x(x);
+  builder_.add_x_type(x_type);
+  return builder_.Finish();
+}
+
+inline bool Verifyany(flatbuffers::Verifier &verifier, const void *union_obj, any type) {
+  switch (type) {
+    case any_NONE: return true;
+    case any_simple_table: return verifier.VerifyTable(reinterpret_cast<const simple_table *>(union_obj));
+    case any_simple_table2: return verifier.VerifyTable(reinterpret_cast<const simple_table2 *>(union_obj));
+    default: return false;
+  }
+}
+```
+可以看到，创建一个包含union必须要传入类型（add_x_type）。最终在内存中也会包含一个类型字段。而对于这个字段的产生，是
+flatbuffers在编译，自动加了一个虚拟的字段，见Parser::ParseField::idl_parser.cpp::592
+```cpp
+  ...
+  if (type.base_type == BASE_TYPE_UNION) {
+    // For union fields, add a second auto-generated field to hold the type,
+    // with a special suffix.
+    ECHECK(AddField(struct_def, name + UnionTypeFieldSuffix(),
+                    type.enum_def->underlying_type, &typefield));
+  }
+  ...
+```
+对应的用法见reflection.h的GetUnionType函数。这些都是1.4.0版本后的函数，1.3.0查不到。
+创建一个uion的时候，一定要指定这个字段。
+
 #### 内存对齐
 
 上面的例子中会发现有很多内存对齐的地方，内存对齐有时候不仅会浪费空间，还会增加代码复杂度。而Protocol Buffer却没有要求内存对齐。

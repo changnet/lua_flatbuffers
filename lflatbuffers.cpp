@@ -11,7 +11,9 @@
 #include <sys/types.h>
 
 #define MAX_NESTED 128
+#define UNION_KEY_LEN 64
 #define LIB_NAME "lua_flatbuffers"
+
 #define ERROR_WHAT(x)   _error_collector.what = x
 #define ERROR_APPEND(x) _error_collector.what.append(x)
 #define ERROR_TRACE(x)  _error_collector.backtrace.push_back(x)
@@ -354,6 +356,16 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
         }\
     }while(0)
 
+#define TYPE_CHECK(TYPE)    \
+    do{\
+        if ( !lua_is##TYPE( L,index + 1 ) )\
+        {\
+            ERROR_WHAT( "expect "#TYPE",got " );\
+            ERROR_APPEND( lua_typename(L, lua_type(L, index + 1)) );\
+            lua_pop(L,1); return -1;\
+        }\
+    }while(0)
+
 #define ADD_NUMBER(T)   \
     do{\
         if ( !lua_isnumber( L,index + 1 ) )\
@@ -362,7 +374,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             ERROR_APPEND( lua_typename( L,lua_type(L,index + 1) ) );\
             ERROR_TRACE( field->name()->c_str() );\
             lua_pop( L,1 );\
-            return -1;\
+            return      -1;\
         }\
         _fbb.AddElement<T>(off, static_cast<T>(lua_tonumber( L,index + 1 ) ),0 );\
     }while(0)
@@ -407,15 +419,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             case reflection::String:
             {
                 CHECK_FIELD();
-                if ( !lua_isstring( L,index + 1 ) )
-                {
-                    ERROR_WHAT( "expect string,got " );
-                    ERROR_APPEND( lua_typename( L,lua_type(L,index+1) ) );
-                    ERROR_TRACE( field->name()->c_str() );
-
-                    lua_pop( L,1 );
-                    return      -1;
-                }
+                TYPE_CHECK(string);
 
                 size_t len = 0;
                 const char *str = lua_tolstring( L,index + 1,&len );
@@ -424,6 +428,8 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             case reflection::Vector:
             {
                 CHECK_FIELD();
+                TYPE_CHECK(table);
+
                 if ( encode_vector( one_nested_offset,schema,field,index + 1 ) < 0 )
                 {
                     lua_pop( L,1 );
@@ -433,6 +439,46 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             case reflection::Union:
             {
                 CHECK_FIELD();
+                TYPE_CHECK(table);
+
+                /* For union fields, flatbuffers add a second auto-generated
+                 * field to hold the type,with a special suffix.so when you build
+                 * a table contain a union field,you have to specified the value
+                 * of this field.
+                 */
+                char union_key[UNION_KEY_LEN];
+                snprintf( union_key,UNION_KEY_LEN,"%s%s",field->name()->c_str(),
+                    flatbuffers::UnionTypeFieldSuffix() );
+                lua_pushstring( L,union_key );
+                lua_gettable  ( L,index ); /* not index + 1 */
+                if ( !lua_isinteger( L,index + 2 ) )
+                {
+                    ERROR_WHAT( "union type not specified,expect integer,got " );
+                    ERROR_APPEND( lua_typename(L, lua_type(L, index + 2)) );
+                    lua_pop(L,2); return -1;
+                }
+
+                int union_type = lua_tointeger( L,index + 2 );
+                lua_pop( L,1 ); /* pop union type */
+
+                /* here we encode union element,the union type should be encode
+                 * later with other scalar type
+                 */
+                const auto *enums = schema->enums()->Get( type->index() );
+                const auto *enumval = enums->values()->LookupByKey( union_type );
+                if ( !enumval )
+                {
+                    ERROR_WHAT( "no such union type" );
+                    lua_pop(L,2); return -1;
+                }
+
+                if ( encode_table( one_nested_offset,schema,enumval->object(),index + 1 ) < 0 )
+                {
+                    ERROR_TRACE( field->name()->c_str() );
+
+                    lua_pop( L,1 );
+                    return      -1;
+                }
             }break;
             case reflection::Obj:
             {
@@ -506,6 +552,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
 #undef ADD_INTEGER
 #undef ADD_NUMBER
 #undef CHECK_FIELD
+#undef TYPE_CHECK
 
 }
 
