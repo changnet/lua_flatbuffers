@@ -16,17 +16,17 @@
 #define ERROR_APPEND(x) _error_collector.what.append(x)
 #define ERROR_TRACE(x)  _error_collector.backtrace.push_back(x)
 
-/* check if postfix match */
-static int is_postfix_file( const char *path,const char *postfix )
+/* check if suffix match */
+static int is_suffix_file( const char *path,const char *suffix )
 {
     /* simply check,not consider file like ./subdir/.bfbs */
-    size_t sz = strlen( postfix );
+    size_t sz = strlen( suffix );
     size_t ps = strlen( path );
 
     /* file like .bfbs will be ignore */
     if ( ps <= sz + 2 ) return 0;
 
-    if ( '.' == path[ps-sz-1] && 0 == strcmp( path + ps - sz,postfix ) )
+    if ( '.' == path[ps-sz-1] && 0 == strcmp( path + ps - sz,suffix ) )
     {
         return true;
     }
@@ -35,7 +35,7 @@ static int is_postfix_file( const char *path,const char *postfix )
 }
 
 /* load all the schema files in this directory */
-int lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
+int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
 {
     DIR *dir = opendir( path );
     if ( !dir )
@@ -57,7 +57,7 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *postfix )
 
         /* dt->d_type == DT_REG not supported by all file system types */
         if ( S_ISREG( path_stat.st_mode ) //This is a regular file
-            && is_postfix_file( dt->d_name,postfix) )
+            && is_suffix_file( dt->d_name,suffix) )
         {
             if ( !load_bfbs_file( dt->d_name ) )
             {
@@ -242,6 +242,10 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
     const auto type = field->type();
     switch( type->element() )
     {
+        case reflection::None:
+        case reflection::Vector:
+        case reflection::Union : assert( false );break;
+
         case reflection::Bool:  CREATE_BOOLEAN_VECTOR(bool);break;
         case reflection::String:CREATE_STRING_VECTOR(std::string);break;
         case reflection::UType: CREATE_NUMBER_VECTOR(uint8_t );break;
@@ -294,21 +298,37 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
                 while ( lua_next( L,index ) )
                 {
                     uint8_t *sub_buffer = buffer + bytesize*sub_index;
-                    if ( encode_struct( sub_buffer,schema,sub_object,index + 2) < 0 )
+                    if ( encode_struct( sub_buffer,schema,sub_object,index + 2 ) < 0 )
                     {
                         lua_pop( L,2 );
-                        return -1;
+                        return      -1;
                     }
 
                     /* in case table key is not number */
                     sub_index ++;
-                    if ( sub_index >= length ) { lua_pop( L,1 );break; }
+                    if ( sub_index >= length ) { lua_pop( L,2 );break; }
 
                     lua_pop( L,1 );
                 }
 
                 return 0;
             }
+
+            /* handle table vector here */
+            std::vector< flatbuffers::Offset<void> > offsets;
+            lua_pushnil( L );
+            while ( lua_next( L,index ) )
+            {
+                flatbuffers::uoffset_t sub_offset = 0;
+                if ( encode_table( sub_offset,schema,sub_object,index + 2 ) < 0 )
+                {
+                    lua_pop( L,2 );
+                    return      -1;
+                }
+
+                lua_pop( L,1 );
+            }
+            offset = _fbb.CreateVector( offsets ).o;
         }break;
     }
     return 0;
@@ -365,14 +385,28 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
         const auto field = *itr; //reflection::Field
         assert( field );
 
-        CHECK_FIELD();
-
         const auto type = field->type();
         flatbuffers::uoffset_t one_nested_offset = 0;
         switch ( field->type()->base_type() )
         {
+            case reflection::None: assert( false );break;
+            /* we handle scalar type later */
+            case reflection::Bool:
+            case reflection::UType:
+            case reflection::Byte:
+            case reflection::UByte:
+            case reflection::Short:
+            case reflection::UShort:
+            case reflection::Int:
+            case reflection::UInt:
+            case reflection::Long:
+            case reflection::ULong:
+            case reflection::Float:
+            case reflection::Double:continue;break;
+
             case reflection::String:
             {
+                CHECK_FIELD();
                 if ( !lua_isstring( L,index + 1 ) )
                 {
                     ERROR_WHAT( "expect string,got " );
@@ -380,7 +414,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                     ERROR_TRACE( field->name()->c_str() );
 
                     lua_pop( L,1 );
-                    return -1;
+                    return      -1;
                 }
 
                 size_t len = 0;
@@ -389,30 +423,37 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             }break;
             case reflection::Vector:
             {
-                encode_vector( one_nested_offset,schema,field,index + 1 );
+                CHECK_FIELD();
+                if ( encode_vector( one_nested_offset,schema,field,index + 1 ) < 0 )
+                {
+                    lua_pop( L,1 );
+                    return      -1;
+                }
             }break;
             case reflection::Union:
             {
-
+                CHECK_FIELD();
             }break;
             case reflection::Obj:
             {
+                CHECK_FIELD();
                 auto *sub_object = schema->objects()->Get( type->index() );
                 if ( encode_object( one_nested_offset,schema,sub_object,index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
 
                     lua_pop( L,1 );
-                    return -1;
+                    return      -1;
                 }
             }break;
-            default : assert( false ); /* other types handle at scalar */
         }
 
         auto &nf   = nested_offset[nested_count];
         nf.offset  = field->offset();
         nf.uoffset = one_nested_offset;
         nested_count ++;
+
+        lua_pop( L,1 ); /* pop the value which push at CHECK_FIELD */
     }
 
     flatbuffers::uoffset_t start = _fbb.StartTable();
@@ -420,39 +461,33 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
     {
         const auto field = *itr;
 
-        CHECK_FIELD();
-
         uint16_t off = field->offset();
         switch ( field->type()->base_type() )
         {
-            /* object shouble be handled at nested */
-            case reflection::Obj: assert( false );break;
             case reflection::None: assert( false );break;
+
+            /* object shouble be handled at nested */
             case reflection::String:
-            {
-            }break;
             case reflection::Vector:
-            {
-            }break;
-            case reflection::Union:
-            {
-            }break;
+            case reflection::Union :
+            case reflection::Obj   : continue;break;
             case reflection::Bool:
             {
+                CHECK_FIELD();
                 bool bool_val = lua_toboolean( L,index + 1 );
                 _fbb.AddElement<uint8_t>( off, bool_val,0 );
             }break;
-            case reflection::UType: ADD_NUMBER(uint8_t );break;
-            case reflection::Byte:  ADD_NUMBER(int8_t  );break;
-            case reflection::UByte: ADD_NUMBER(uint8_t );break;
-            case reflection::Short: ADD_NUMBER(int16_t );break;
-            case reflection::UShort:ADD_NUMBER(uint16_t);break;
-            case reflection::Int:   ADD_NUMBER(int32_t );break;
-            case reflection::UInt:  ADD_NUMBER(uint32_t);break;
-            case reflection::Long:  ADD_NUMBER(int64_t );break;
-            case reflection::ULong: ADD_NUMBER(uint64_t);break;
-            case reflection::Float: ADD_NUMBER(float   );break;
-            case reflection::Double:ADD_NUMBER(double  );break;
+            case reflection::UType: CHECK_FIELD();ADD_NUMBER(uint8_t );break;
+            case reflection::Byte:  CHECK_FIELD();ADD_NUMBER(int8_t  );break;
+            case reflection::UByte: CHECK_FIELD();ADD_NUMBER(uint8_t );break;
+            case reflection::Short: CHECK_FIELD();ADD_NUMBER(int16_t );break;
+            case reflection::UShort:CHECK_FIELD();ADD_NUMBER(uint16_t);break;
+            case reflection::Int:   CHECK_FIELD();ADD_NUMBER(int32_t );break;
+            case reflection::UInt:  CHECK_FIELD();ADD_NUMBER(uint32_t);break;
+            case reflection::Long:  CHECK_FIELD();ADD_NUMBER(int64_t );break;
+            case reflection::ULong: CHECK_FIELD();ADD_NUMBER(uint64_t);break;
+            case reflection::Float: CHECK_FIELD();ADD_NUMBER(float   );break;
+            case reflection::Double:CHECK_FIELD();ADD_NUMBER(double  );break;
         }
 
         lua_pop( L,1 ); /* pop the value which push at CHECK_FIELD */
