@@ -23,13 +23,16 @@ public:
     int decode( lua_State *L,const char *schema,const char *object,int index );
 
     const char *last_error();
+    const char *get_buffer( size_t &sz );
     bool load_bfbs_file( const char *file );
     int load_bfbs_path( const char *path,const char *postfix = NULL );
 private:
     struct
     {
         std::string what;
+        std::string buffer;
         std::string schema;
+        std::string object;
         std::vector< std::string > backtrace;
     } _error_collector;
 

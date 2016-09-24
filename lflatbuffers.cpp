@@ -105,7 +105,27 @@ bool lflatbuffers::load_bfbs_file( const char *file )
 
 const char *lflatbuffers::last_error()
 {
-    return _error_collector.what.c_str();
+    if ( _error_collector.backtrace.empty() )
+    {
+        return _error_collector.what.c_str();
+    }
+
+    std::string &buffer = _error_collector.buffer;
+    buffer = _error_collector.what;
+
+    buffer.append( " at (" );
+    buffer.append( _error_collector.schema );
+
+    buffer.append( ")" );
+    buffer.append( _error_collector.object );
+    for ( auto itr = _error_collector.backtrace.rbegin();
+            itr != _error_collector.backtrace.rend();itr ++ )
+    {
+        buffer.append( "."  );
+        buffer.append( *itr );
+    }
+
+    return buffer.c_str();
 }
 
 int lflatbuffers::encode_struct(uint8_t *buffer,
@@ -578,7 +598,7 @@ int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
         return 0;
     }
 
-    return 0;
+    return encode_table( offset,schema,object,index );
 }
 
 int lflatbuffers::encode( lua_State *L,
@@ -618,6 +638,7 @@ int lflatbuffers::encode( lua_State *L,
     if ( encode_object( offset,_schema,_object,index ) <  0 )
     {
         _error_collector.schema = schema;
+        _error_collector.object = object;
         return -1;
     }
     _fbb.Finish( flatbuffers::Offset<void>(offset) );
@@ -629,6 +650,13 @@ int lflatbuffers::decode( lua_State *L,
     const char *schema,const char *object,int index )
 {
     return 0;
+}
+
+/* before this function,make sure you had successfully cal encode */
+const char *lflatbuffers::get_buffer( size_t &sz )
+{
+    sz = _fbb.GetSize();
+    return reinterpret_cast< const char* >( _fbb.GetBufferPointer() );
 }
 
 /* ========================== static function for lua ======================= */
@@ -695,6 +723,11 @@ static int encode( lua_State *L )
     {
         return luaL_error( L,(*lfb)->last_error() );
     }
+
+    size_t sz = 0;
+    const char *buffer = (*lfb)->get_buffer( sz );
+
+    lua_pushlstring( L,buffer,sz );
     return 1;
 }
 

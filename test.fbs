@@ -69,3 +69,6 @@ table test
 root_type test;
 
 file_extension "bfbs";
+
+// flatc --binary --schema test.fbs
+// flatc --cpp test.fbs
