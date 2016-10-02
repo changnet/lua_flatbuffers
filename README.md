@@ -30,3 +30,4 @@ endif()
 3. default value not encode but decode
 4. Union and enum test
 5. encode vector length is 0
+6. test decode invalid buffer

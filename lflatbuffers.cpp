@@ -12,6 +12,7 @@
 
 #define MAX_NESTED 128
 #define UNION_KEY_LEN 64
+#define MAX_LUA_STACK 256
 #define LIB_NAME "lua_flatbuffers"
 
 #define ERROR_WHAT(x)   _error_collector.what = x
@@ -647,11 +648,160 @@ int lflatbuffers::encode( lua_State *L,
 }
 
 int lflatbuffers::decode( lua_State *L,
-    const char *schema,const char *object,int index )
+    const char *schema,const char *object,const char *buffer,size_t sz)
 {
+    auto sch_itr = _bfbs_buffer.find( schema );
+    if ( sch_itr == _bfbs_buffer.end() )
+    {
+        _error_collector.what = "no such schema";
+        return -1;
+    }
+
+    /* casting into a schema pointer */
+    const auto *_schema = reflection::GetSchema( sch_itr->second.c_str() );
+
+    /* do a bsearch */
+    const auto *_object = _schema->objects()->LookupByKey( object );
+    if ( !_object )
+    {
+        ERROR_WHAT( "no such object(" );
+        ERROR_APPEND( object );
+        ERROR_APPEND( ") at schema(" );
+        ERROR_APPEND( schema );
+        ERROR_APPEND( ")." );
+
+        return -1;
+    }
+
+    /* seems no way to reuse a verifier like flatbufferbuilder,we create a new one */
+    flatbuffers::Verifier vfer( reinterpret_cast<const uint8_t *>( buffer ), sz );
+
+    /* verify first 4bytes(root object offset or root table offset in doc/README.md) */
+    if ( !vfer.Verify<flatbuffers::uoffset_t>( buffer ) )
+    {
+        ERROR_WHAT( "invalid buffer,no root object offset" );
+        return -1;
+    }
+
+    /* verify root object offset */
+    flatbuffers::uoffset_t root_offset = flatbuffers::EndianScalar(
+            *reinterpret_cast<const flatbuffers::uoffset_t *>( buffer ) );
+    if ( !vfer.Verify( buffer,root_offset ) )
+    {
+        ERROR_WHAT( "invalid buffer,no root object" );
+        return -1;
+    }
+    /* now we can safely get root object
+     * other field,like vtable offset will be verify later
+     */
+    const void* root = flatbuffers::GetRoot<void>(buffer);
+
+    int top = lua_gettop( L );
+    if ( decode_object( L,_schema,_object,vfer,root ) < 0 )
+    {
+        _error_collector.schema = schema;
+        _error_collector.object = object;
+        return -1;
+    }
+
+    /* make sure stack clean after decode */
+    assert( top + 1 == lua_gettop(L) );
     return 0;
 }
 
+int lflatbuffers::decode_object( lua_State *L,const reflection::Schema *schema,
+    const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root )
+{
+    if ( object->is_struct() ) return decode_struct( L,schema,object,vfer,root );
+
+    return 0;
+}
+
+int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
+    const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root )
+{
+    if ( !vfer.Verify( root, object->bytesize() ) )
+    {
+        ERROR_WHAT( "not a invalid flatbuffer" );
+        return -1;
+    }
+
+    if ( lua_gettop( L ) > MAX_LUA_STACK )
+    {
+        ERROR_WHAT( "lua stack overflow" );
+        return -1;
+    }
+
+    lua_checkstack( L,3 ); /* table,val and key */
+    lua_newtable( L );
+
+    const flatbuffers::Struct& st  =
+        *reinterpret_cast<const flatbuffers::Struct*>( root );
+
+    const auto fields = object->fields();
+    for ( auto itr = fields->begin();itr != fields->end();itr ++ )
+    {
+        const auto field = *itr; //reflection::Field
+        assert( field );
+
+        /* field->deprecated() ?? */
+        const auto type = field->type();
+        switch( type->base_type() )
+        {
+            case reflection::None  :
+            case reflection::String:
+            case reflection::Vector:
+            case reflection::Union : assert( false );break;
+            case reflection::Bool  :
+            {
+                int64_t val = flatbuffers::GetAnyFieldI( st, *field );
+
+                lua_pushboolean( L,val );
+                lua_pushstring ( L,field->name()->c_str() );
+                lua_rawset( L,-1 );
+            }break;
+            case reflection::UType :
+            case reflection::Byte  :
+            case reflection::UByte :
+            case reflection::Short :
+            case reflection::UShort:
+            case reflection::Int   :
+            case reflection::UInt  :
+            case reflection::Long  :
+            case reflection::ULong :
+            {
+                int64_t val = flatbuffers::GetAnyFieldI( st, *field );
+
+                lua_pushinteger( L,val );
+            }break;
+            case reflection::Float :
+            case reflection::Double:
+            {
+                double val = flatbuffers::GetAnyFieldF( st, *field );
+
+                lua_pushnumber( L,val );
+            }break;
+            case reflection::Obj   :
+            {
+                auto *sub_object = schema->objects()->Get( type->index() );
+
+                assert( sub_object->is_struct() );
+
+                const uint8_t* sub_root = st.GetAddressOf( field->offset() );
+                if ( decode_struct( L,schema,sub_object,vfer,sub_root ) < 0 )
+                {
+                    lua_pop( L,1 );
+                    return -1;
+                }
+            }break;
+        }
+
+        lua_pushstring ( L,field->name()->c_str() );
+        lua_rawset( L,-1 );
+    }
+
+    return 0;
+}
 /* before this function,make sure you had successfully cal encode */
 const char *lflatbuffers::get_buffer( size_t &sz )
 {
@@ -733,6 +883,27 @@ static int encode( lua_State *L )
 
 static int decode( lua_State *L )
 {
+    class lflatbuffers** lfb =
+        (class lflatbuffers**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( lfb == NULL || *lfb == NULL )
+    {
+        return luaL_error( L, "encode argument #1 expect %s", LIB_NAME );
+    }
+
+    const char *schema = luaL_checkstring( L,2 );
+    const char *object = luaL_checkstring( L,3 );
+
+    size_t sz = 0;
+    const char *buffer = luaL_checklstring( L,4,&sz );
+
+    assert( buffer && sz > 0 );
+
+    if ( (*lfb)->decode( L,schema,object,buffer,sz ) < 0 )
+    {
+        return luaL_error( L,(*lfb)->last_error() );
+    }
+
+    /* a lua table will be return if success */
     return 1;
 }
 

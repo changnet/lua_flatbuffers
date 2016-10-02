@@ -20,7 +20,7 @@ public:
     ~lflatbuffers() {}
     explicit lflatbuffers( lua_State *L ) : L(L) {}
     int encode( lua_State *L,const char *schema,const char *object,int index );
-    int decode( lua_State *L,const char *schema,const char *object,int index );
+    int decode( lua_State *L,const char *schema,const char *object,const char *buffer,size_t sz );
 
     const char *last_error();
     const char *get_buffer( size_t &sz );
@@ -44,6 +44,11 @@ private:
         const reflection::Schema *schema,const reflection::Object *object,int index );
     int encode_object( flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Object *object,int index );
+
+    int decode_object( lua_State *L,const reflection::Schema *schema,
+        const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
+    int decode_struct( lua_State *L,const reflection::Schema *schema,
+        const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
 private:
     lua_State *L;
     flatbuffers::FlatBufferBuilder _fbb;

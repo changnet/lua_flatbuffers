@@ -6,6 +6,7 @@
 
 #### flatbuffers的内存模型
 ![flatbuffers memory](flatbuffers vtable.png)
+root table offset类型为uoffset_t，即uint32_t
 
 #### flatbuffers的创建过程
 
