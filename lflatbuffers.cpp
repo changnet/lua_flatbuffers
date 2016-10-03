@@ -714,7 +714,7 @@ int lflatbuffers::decode_object( lua_State *L,const reflection::Schema *schema,
 {
     if ( object->is_struct() ) return decode_struct( L,schema,object,vfer,root );
 
-    return 0;
+    return decode_table( L,schema,object,vfer,root );
 }
 
 int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
@@ -810,6 +810,33 @@ int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
 int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
     const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root )
 {
+#define VERIFY_FIELD(T,tbl,field)    \
+    do{\
+        bool verify = field->required() ?\
+            tbl.VerifyField<T>(vfer,field->offset()) :\
+            tbl.VerifyFieldRequired<T>(vfer,field->offset());\
+        if ( !verify )\
+        {\
+            ERROR_WHAT( "table field verify fail,not a invalid flatbuffer" );\
+            lua_pop( L,2 ); return -1;\
+        }\
+    }while(0)
+
+#define DECODE_INTEGER_FIELD(T,tbl,field)    \
+    do{\
+        VERIFY_FIELD(T,tbl,field);\
+        T val = flatbuffers::GetFieldI<T>( tbl,*field );\
+        lua_pushinteger( L,val );\
+    }while(0)
+
+
+#define DECODE_NUMBER_FIELD(T,tbl,field)    \
+    do{\
+        VERIFY_FIELD(T,tbl,field);\
+        T val = flatbuffers::GetFieldF<T>( tbl,*field );\
+        lua_pushnumber( L,val );\
+    }while(0)
+
     const flatbuffers::Table &tbl =
         *reinterpret_cast<const flatbuffers::Table*>( root );
     /* root maybe NULL or illegal data,but it's safe to call VerifyTableStart */
@@ -820,99 +847,133 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
     }
 
 
-        if ( lua_gettop( L ) > MAX_LUA_STACK )
+    if ( lua_gettop( L ) > MAX_LUA_STACK )
+    {
+        ERROR_WHAT( "lua stack overflow" );
+        return -1;
+    }
+
+    lua_checkstack( L,3 ); /* table,val and key */
+    lua_newtable( L );
+
+    const auto fields = object->fields();
+    for ( auto itr = fields->begin();itr != fields->end();itr ++ )
+    {
+        const auto field = *itr; //reflection::Field
+        assert( field );
+
+        lua_pushstring ( L,field->name()->c_str() );
+
+        /* field->deprecated() ?? */
+        const auto type = field->type();
+        switch( type->base_type() )
         {
-            ERROR_WHAT( "lua stack overflow" );
-            return -1;
-        }
-
-        lua_checkstack( L,3 ); /* table,val and key */
-        lua_newtable( L );
-
-        const flatbuffers::Struct& st  =
-            *reinterpret_cast<const flatbuffers::Struct*>( root );
-
-        const auto fields = object->fields();
-        for ( auto itr = fields->begin();itr != fields->end();itr ++ )
-        {
-            const auto field = *itr; //reflection::Field
-            assert( field );
-
-            lua_pushstring ( L,field->name()->c_str() );
-
-            /* field->deprecated() ?? */
-            const auto type = field->type();
-            switch( type->base_type() )
+            case reflection::None  : assert( false );break;
+            case reflection::String:
             {
-                case reflection::None  : assert( false );break;
-                case reflection::String:
-                {
-                    bool verify = field->required() ?
-                        tbl.VerifyField<flatbuffers::uoffset_t>(vfer,field->offset()) :
-                        tbl.VerifyFieldRequired<flatbuffers::uoffset_t>(vfer,field->offset());
-                    if ( !verify )
-                    {
-                        ERROR_WHAT( "table field verify fail,not a invalid flatbuffer" );
-                        lua_pop( L,2 );
-                        return -1;
-                    }
+                VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
 
-                    const flatbuffers::String* str = flatbuffers::GetFieldS( tbl,*field );
-                    if ( !str ) // return nullptr if string field not exist
-                    {
-                        lua_pop( L,1 ); /* pop the key */
-                        continue;
-                    }
-                    lua_pushstring( L,str->c_str() );
+                const flatbuffers::String* str = flatbuffers::GetFieldS( tbl,*field );
+                if ( !str ) // return nullptr if string field not exist
+                {
+                    lua_pop( L,1 ); /* pop the key */
+                    continue;
                 }
-                case reflection::Vector:
-                case reflection::Union :
-                case reflection::Bool  :
-                {
-                    int64_t val = flatbuffers::GetAnyFieldI( st, *field );
-
-                    lua_pushboolean( L,val );
-                }break;
-                case reflection::UType :
-                case reflection::Byte  :
-                case reflection::UByte :
-                case reflection::Short :
-                case reflection::UShort:
-                case reflection::Int   :
-                case reflection::UInt  :
-                case reflection::Long  :
-                case reflection::ULong :
-                {
-                    int64_t val = flatbuffers::GetAnyFieldI( st, *field );
-
-                    lua_pushinteger( L,val );
-                }break;
-                case reflection::Float :
-                case reflection::Double:
-                {
-                    double val = flatbuffers::GetAnyFieldF( st, *field );
-
-                    lua_pushnumber( L,val );
-                }break;
-                case reflection::Obj   :
-                {
-                    auto *sub_object = schema->objects()->Get( type->index() );
-
-                    assert( sub_object->is_struct() );
-
-                    const uint8_t* sub_root = st.GetAddressOf( field->offset() );
-                    if ( decode_struct( L,schema,sub_object,vfer,sub_root ) < 0 )
-                    {
-                        lua_pop( L,2 );
-                        return -1;
-                    }
-                }break;
+                lua_pushstring( L,str->c_str() );
             }
+            case reflection::Obj   :
+            {
+                VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
 
-            lua_rawset( L,-3 );
+                auto *sub_object = schema->objects()->Get( type->index() );
+                /* GetStruct get data pointer,a field don't have vtable
+                 * GetPointer get data pointer,a field have vtable,like table
+                 */
+                const void *sub_root = sub_object->is_struct() ?
+                    tbl.GetStruct<const void*>( field->offset() ) :
+                    tbl.GetPointer<const void*>( field->offset() );
+                if ( !sub_root ) // optional field
+                {
+                    lua_pop( L,1 );
+                    continue;
+                }
+                if ( decode_object( L,schema,sub_object,vfer,sub_root ) < 0 )
+                {
+                    lua_pop( L,2 );
+                    return -1;
+                }
+            }break;
+            case reflection::Vector:
+            {
+                VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
+            }break;
+            case reflection::Union :
+            {
+                VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
+
+                const void *sub_root = tbl.GetPointer<const void*>( field->offset() );
+                if ( !sub_root ) // optional field
+                {
+                    lua_pop( L,1 );
+                    continue;
+                }
+
+                /* GetUnionType(in reflection.h) do most of the jobs here,but we
+                 * need to do more
+                 */
+                char union_key[UNION_KEY_LEN];
+                snprintf( union_key,UNION_KEY_LEN,"%s%s",field->name()->c_str(),
+                    flatbuffers::UnionTypeFieldSuffix() );
+
+                auto type_field = fields->LookupByKey( union_key );
+                assert( type_field );
+                auto union_type = flatbuffers::GetFieldI<uint8_t>( tbl, *type_field );
+
+                auto enumdef = schema->enums()->Get( type->index() );
+                auto enumval = enumdef->values()->LookupByKey( union_type );
+                assert( enumval );
+
+                /* push union type(xx_type ) to lua,nesscery ?? */
+                lua_pushstring ( L,union_key );
+                lua_pushinteger( L,union_type );
+                lua_rawset( L,-4 );
+
+                 const auto *sub_object = enumval->object();
+                 assert( sub_object && !sub_object->is_struct() );
+
+                 if ( decode_table( L,schema,sub_object,vfer,sub_root) < 0 )
+                 {
+                     lua_pop( L,2 );
+                     return      -1;
+                 }
+            }break;
+            case reflection::Bool  :
+            {
+                VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
+                uint8_t val = flatbuffers::GetFieldI<uint8_t>( tbl,*field );
+                lua_pushboolean( L,val );
+            }break;
+            case reflection::UType :DECODE_INTEGER_FIELD(  uint8_t,tbl,field );break;
+            case reflection::Byte  :DECODE_INTEGER_FIELD(   int8_t,tbl,field );break;
+            case reflection::UByte :DECODE_INTEGER_FIELD(  uint8_t,tbl,field );break;
+            case reflection::Short :DECODE_INTEGER_FIELD(  int16_t,tbl,field );break;
+            case reflection::UShort:DECODE_INTEGER_FIELD( uint16_t,tbl,field );break;
+            case reflection::Int   :DECODE_INTEGER_FIELD(  int32_t,tbl,field );break;
+            case reflection::UInt  :DECODE_INTEGER_FIELD( uint32_t,tbl,field );break;
+            case reflection::Long  :DECODE_INTEGER_FIELD(  int64_t,tbl,field );break;
+            case reflection::ULong :DECODE_INTEGER_FIELD( uint64_t,tbl,field );break;
+            case reflection::Float :DECODE_NUMBER_FIELD (    float,tbl,field );break;
+            case reflection::Double:DECODE_NUMBER_FIELD (   double,tbl,field );break;
         }
+
+        lua_rawset( L,-3 );
+    }
 
     return 0;
+
+#undef VERIFY_FIELD
+#undef DECODE_INTEGER_FIELD
+#undef DECODE_NUMBER_FIELD
 }
 
 /* before this function,make sure you had successfully call encode */

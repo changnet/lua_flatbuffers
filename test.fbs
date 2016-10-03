@@ -2,6 +2,8 @@ include "monster_test.fbs";
 
 struct scalar_types
 {
+	bool_min:bool;
+	bool_max:bool;
 	int8_min:byte;
 	int8_max:byte;
 	uint8_min:ubyte;

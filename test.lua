@@ -45,6 +45,8 @@ print( lfb:load_bfbs_file( "test.bfbs" ) )
 
 local tbl =
 {
+    bool_min = false,
+    bool_max = true,
     int8_min = -128,
     int8_max = 128,
     uint8_min = 223,
@@ -64,6 +66,9 @@ local tbl =
     int64_max = 99887766,
     uint64_min = 68932345,
     uint64_max = 68932345,
+
+    float_min = 998998.12334567,
+    float_max = 998998.987654321,
 
     double_min = 998.893837464,
     double_max = 998.893837464,
