@@ -190,7 +190,7 @@ int lflatbuffers::encode_struct(uint8_t *buffer,
             case reflection::Obj:
             {
                 /* struct contain struct*/
-                auto *sub_object = schema->objects()->Get( type->index() );
+                const auto *sub_object = schema->objects()->Get( type->index() );
                 assert( sub_object && sub_object->is_struct() );
 
                 if ( encode_struct( data,schema,sub_object,index + 1 ) < 0 )
@@ -880,7 +880,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
                     continue;
                 }
                 lua_pushstring( L,str->c_str() );
-            }
+            }break;
             case reflection::Obj   :
             {
                 VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
@@ -906,6 +906,18 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
             case reflection::Vector:
             {
                 VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
+                const auto* vec = tbl.GetPointer<const flatbuffers::VectorOfAny*>( field->offset() );
+                if ( !vec ) // optional field
+                {
+                    lua_pop( L,1 );
+                    continue      ;
+                }
+
+                if ( decode_vector( L,schema,type,vfer,vec ) < 0 )
+                {
+                    lua_pop( L,2 );
+                    return      -1;
+                }
             }break;
             case reflection::Union :
             {
@@ -915,7 +927,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
                 if ( !sub_root ) // optional field
                 {
                     lua_pop( L,1 );
-                    continue;
+                    continue      ;
                 }
 
                 /* GetUnionType(in reflection.h) do most of the jobs here,but we
@@ -969,11 +981,145 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
         lua_rawset( L,-3 );
     }
 
+    // Called at the end of a table to pop the depth count,always true
+    vfer.EndTable();
     return 0;
 
 #undef VERIFY_FIELD
 #undef DECODE_INTEGER_FIELD
 #undef DECODE_NUMBER_FIELD
+}
+
+int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
+    const reflection::Type *type,flatbuffers::Verifier &vfer,const flatbuffers::VectorOfAny *vec )
+{
+/* GetAnyVectorElemI  do the same job,just a little slow */
+#define VECTOR_GET(T) flatbuffers::ReadScalar<T>(vec->Data() + sz * index)
+
+#define INTEGER_VECTOR(T)    \
+    do{\
+        for ( unsigned int index = 0;index < vec->size();index ++ )\
+        {\
+            T val = VECTOR_GET( T );\
+            lua_pushinteger( L,val );\
+            lua_rawseti( L,stack,index + 1 );\
+        }\
+    }while(0)
+
+#define NUMBER_VECTOR(T)    \
+    do{\
+        for ( unsigned int index = 0;index < vec->size();index ++ )\
+        {\
+            T val = VECTOR_GET( T );\
+            lua_pushnumber( L,val );\
+            lua_rawseti( L,stack,index + 1 );\
+        }\
+    }while(0)
+
+    reflection::BaseType et = type->element();
+    size_t sz = flatbuffers::GetTypeSizeInline( et,type->index(),*schema );
+
+    const uint8_t* end;
+    if ( !vfer.VerifyVector(reinterpret_cast<const uint8_t*>(vec), sz, &end) )
+    {
+        ERROR_WHAT( "verify vector fail,not a valid flatbuffer" );
+        return -1;
+    }
+
+    int stack = lua_gettop( L );
+    if ( stack > MAX_LUA_STACK )
+    {
+        ERROR_WHAT( "lua stack overflow" );
+        return -1;
+    }
+
+    lua_checkstack( L,2 ); /* table,val */
+    lua_newtable( L );
+    stack ++;
+
+    switch( et )
+    {
+        case reflection::None  :
+        case reflection::Vector:
+        case reflection::Union : assert( false );break;
+        case reflection::String:
+        {
+            for ( unsigned int index = 0;index < vec->size();index ++ )
+            {
+                const auto *str = flatbuffers::GetAnyVectorElemPointer<
+                                const flatbuffers::String>( vec,index );
+                if ( !vfer.Verify( str ) )
+                {
+                    ERROR_WHAT( "verify string vector fail,not a valid flatbuffer" );
+                    lua_pop( L,1 );return -1;
+                }
+                lua_pushstring( L,str->c_str() );
+                lua_rawseti( L,stack,index + 1 );
+            }
+        }break;
+        case reflection::Obj   :
+        {
+            const auto *sub_object = schema->objects()->Get( type->index() );
+            if ( sub_object->is_struct() )
+            {
+                for ( unsigned int index = 0;index < vec->size();index ++ )
+                {
+                    const void *sub_root =
+                        flatbuffers::GetAnyVectorElemAddressOf<
+                                    const void>( vec, index, sz );
+                    if ( decode_struct( L,schema,sub_object,vfer,sub_root ) < 0 )
+                    {
+                        lua_pop( L,1 );
+                        return      -1;
+                    }
+                    assert( lua_gettop( L ) == stack + 1 );
+                    lua_rawseti( L,stack,index + 1 );
+                }
+            }
+            else
+            {
+                for ( unsigned int index = 0;index < vec->size();index ++ )
+                {
+                    const void *sub_root =
+                        flatbuffers::GetAnyVectorElemPointer<
+                                    const void>( vec, index );
+                    if ( decode_table( L,schema,sub_object,vfer,sub_root ) < 0 )
+                    {
+                        lua_pop( L,1 );
+                        return      -1;
+                    }
+                    assert( lua_gettop( L ) == stack + 1 );
+                    lua_rawseti( L,stack,index + 1 );
+                }
+            }
+        }break;
+        case reflection::Bool  :
+        {
+            for ( unsigned int index = 0;index < vec->size();index ++ )
+            {
+                uint8_t val = VECTOR_GET( uint8_t );
+                lua_pushboolean( L,val );
+                lua_rawseti( L,stack,index + 1 );
+            }
+        }break;
+        case reflection::UType :INTEGER_VECTOR( uint8_t);break;
+        case reflection::Byte  :INTEGER_VECTOR(  int8_t);break;
+        case reflection::UByte :INTEGER_VECTOR( uint8_t);break;
+        case reflection::Short :INTEGER_VECTOR( int16_t);break;
+        case reflection::UShort:INTEGER_VECTOR(uint16_t);break;
+        case reflection::Int   :INTEGER_VECTOR( int32_t);break;
+        case reflection::UInt  :INTEGER_VECTOR(uint32_t);break;
+        case reflection::Long  :INTEGER_VECTOR( int64_t);break;
+        case reflection::ULong :INTEGER_VECTOR(uint64_t);break;
+        case reflection::Float :NUMBER_VECTOR (   float);break;
+        case reflection::Double:NUMBER_VECTOR (  double);break;
+    }
+
+    return 0;
+
+#undef VECTOR_GET
+#undef INTEGER_VECTOR
+#undef NUMBER_VECTOR
 }
 
 /* before this function,make sure you had successfully call encode */
