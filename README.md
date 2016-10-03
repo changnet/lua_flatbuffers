@@ -31,3 +31,5 @@ endif()
 4. Union and enum test
 5. encode vector length is 0
 6. test decode invalid buffer
+7. test optional field and verify
+8. 版本兼容时struct、table的兼容处理

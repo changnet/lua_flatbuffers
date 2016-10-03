@@ -49,6 +49,8 @@ private:
         const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
     int decode_struct( lua_State *L,const reflection::Schema *schema,
         const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
+    int decode_table( lua_State *L,const reflection::Schema *schema,
+        const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
 private:
     lua_State *L;
     flatbuffers::FlatBufferBuilder _fbb;

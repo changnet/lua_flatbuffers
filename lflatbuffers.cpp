@@ -722,7 +722,7 @@ int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
 {
     if ( !vfer.Verify( root, object->bytesize() ) )
     {
-        ERROR_WHAT( "not a invalid flatbuffer" );
+        ERROR_WHAT( "struct verify fail,not a invalid flatbuffer" );
         return -1;
     }
 
@@ -744,6 +744,8 @@ int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
         const auto field = *itr; //reflection::Field
         assert( field );
 
+        lua_pushstring ( L,field->name()->c_str() );
+
         /* field->deprecated() ?? */
         const auto type = field->type();
         switch( type->base_type() )
@@ -757,8 +759,6 @@ int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
                 int64_t val = flatbuffers::GetAnyFieldI( st, *field );
 
                 lua_pushboolean( L,val );
-                lua_pushstring ( L,field->name()->c_str() );
-                lua_rawset( L,-1 );
             }break;
             case reflection::UType :
             case reflection::Byte  :
@@ -790,19 +790,132 @@ int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
                 const uint8_t* sub_root = st.GetAddressOf( field->offset() );
                 if ( decode_struct( L,schema,sub_object,vfer,sub_root ) < 0 )
                 {
-                    lua_pop( L,1 );
+                    lua_pop( L,2 );
                     return -1;
                 }
             }break;
         }
 
-        lua_pushstring ( L,field->name()->c_str() );
-        lua_rawset( L,-1 );
+        lua_rawset( L,-3 );
     }
 
     return 0;
 }
-/* before this function,make sure you had successfully cal encode */
+
+/* decode table(in binary buffer) to a lua table
+ * all fields in table are optional,we are able to tell wether a field exist in
+ * table with GetOptionalFieldOffset.but GetField always return value(a default
+ * one if the field not exist),so all field will be push to lua table.
+ */
+int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
+    const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root )
+{
+    const flatbuffers::Table &tbl =
+        *reinterpret_cast<const flatbuffers::Table*>( root );
+    /* root maybe NULL or illegal data,but it's safe to call VerifyTableStart */
+    if ( !tbl.VerifyTableStart( vfer ) )
+    {
+        ERROR_WHAT( "table verify fail,not a invalid flatbuffer" );
+        return -1;
+    }
+
+
+        if ( lua_gettop( L ) > MAX_LUA_STACK )
+        {
+            ERROR_WHAT( "lua stack overflow" );
+            return -1;
+        }
+
+        lua_checkstack( L,3 ); /* table,val and key */
+        lua_newtable( L );
+
+        const flatbuffers::Struct& st  =
+            *reinterpret_cast<const flatbuffers::Struct*>( root );
+
+        const auto fields = object->fields();
+        for ( auto itr = fields->begin();itr != fields->end();itr ++ )
+        {
+            const auto field = *itr; //reflection::Field
+            assert( field );
+
+            lua_pushstring ( L,field->name()->c_str() );
+
+            /* field->deprecated() ?? */
+            const auto type = field->type();
+            switch( type->base_type() )
+            {
+                case reflection::None  : assert( false );break;
+                case reflection::String:
+                {
+                    bool verify = field->required() ?
+                        tbl.VerifyField<flatbuffers::uoffset_t>(vfer,field->offset()) :
+                        tbl.VerifyFieldRequired<flatbuffers::uoffset_t>(vfer,field->offset());
+                    if ( !verify )
+                    {
+                        ERROR_WHAT( "table field verify fail,not a invalid flatbuffer" );
+                        lua_pop( L,2 );
+                        return -1;
+                    }
+
+                    const flatbuffers::String* str = flatbuffers::GetFieldS( tbl,*field );
+                    if ( !str ) // return nullptr if string field not exist
+                    {
+                        lua_pop( L,1 ); /* pop the key */
+                        continue;
+                    }
+                    lua_pushstring( L,str->c_str() );
+                }
+                case reflection::Vector:
+                case reflection::Union :
+                case reflection::Bool  :
+                {
+                    int64_t val = flatbuffers::GetAnyFieldI( st, *field );
+
+                    lua_pushboolean( L,val );
+                }break;
+                case reflection::UType :
+                case reflection::Byte  :
+                case reflection::UByte :
+                case reflection::Short :
+                case reflection::UShort:
+                case reflection::Int   :
+                case reflection::UInt  :
+                case reflection::Long  :
+                case reflection::ULong :
+                {
+                    int64_t val = flatbuffers::GetAnyFieldI( st, *field );
+
+                    lua_pushinteger( L,val );
+                }break;
+                case reflection::Float :
+                case reflection::Double:
+                {
+                    double val = flatbuffers::GetAnyFieldF( st, *field );
+
+                    lua_pushnumber( L,val );
+                }break;
+                case reflection::Obj   :
+                {
+                    auto *sub_object = schema->objects()->Get( type->index() );
+
+                    assert( sub_object->is_struct() );
+
+                    const uint8_t* sub_root = st.GetAddressOf( field->offset() );
+                    if ( decode_struct( L,schema,sub_object,vfer,sub_root ) < 0 )
+                    {
+                        lua_pop( L,2 );
+                        return -1;
+                    }
+                }break;
+            }
+
+            lua_rawset( L,-3 );
+        }
+
+    return 0;
+}
+
+/* before this function,make sure you had successfully call encode */
 const char *lflatbuffers::get_buffer( size_t &sz )
 {
     sz = _fbb.GetSize();
