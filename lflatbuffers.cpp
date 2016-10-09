@@ -106,11 +106,6 @@ bool lflatbuffers::load_bfbs_file( const char *file )
 
 const char *lflatbuffers::last_error()
 {
-    if ( _error_collector.backtrace.empty() )
-    {
-        return _error_collector.what.c_str();
-    }
-
     std::string &buffer = _error_collector.buffer;
     buffer = _error_collector.what;
 
@@ -680,6 +675,8 @@ int lflatbuffers::decode( lua_State *L,
     if ( !vfer.Verify<flatbuffers::uoffset_t>( buffer ) )
     {
         ERROR_WHAT( "invalid buffer,no root object offset" );
+        _error_collector.schema = schema;
+        _error_collector.object = object;
         return -1;
     }
 
@@ -689,6 +686,8 @@ int lflatbuffers::decode( lua_State *L,
     if ( !vfer.Verify( buffer,root_offset ) )
     {
         ERROR_WHAT( "invalid buffer,no root object" );
+        _error_collector.schema = schema;
+        _error_collector.object = object;
         return -1;
     }
     /* now we can safely get root object
@@ -790,6 +789,7 @@ int lflatbuffers::decode_struct( lua_State *L,const reflection::Schema *schema,
                 const uint8_t* sub_root = st.GetAddressOf( field->offset() );
                 if ( decode_struct( L,schema,sub_object,vfer,sub_root ) < 0 )
                 {
+                    ERROR_TRACE( sub_object->name()->c_str() );
                     lua_pop( L,2 );
                     return -1;
                 }
@@ -813,11 +813,12 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
 #define VERIFY_FIELD(T,tbl,field)    \
     do{\
         bool verify = field->required() ?\
-            tbl.VerifyField<T>(vfer,field->offset()) :\
-            tbl.VerifyFieldRequired<T>(vfer,field->offset());\
+            tbl.VerifyFieldRequired<T>(vfer,field->offset()) :\
+            tbl.VerifyField<T>(vfer,field->offset());\
         if ( !verify )\
         {\
             ERROR_WHAT( "table field verify fail,not a invalid flatbuffer" );\
+            ERROR_TRACE( field->name()->c_str() );\
             lua_pop( L,2 ); return -1;\
         }\
     }while(0)
@@ -915,6 +916,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
 
                 if ( decode_vector( L,schema,type,vfer,vec ) < 0 )
                 {
+                    ERROR_TRACE( field->name()->c_str() );
                     lua_pop( L,2 );
                     return      -1;
                 }
@@ -961,7 +963,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
             }break;
             case reflection::Bool  :
             {
-                VERIFY_FIELD( flatbuffers::uoffset_t,tbl,field );
+                VERIFY_FIELD( uint8_t,tbl,field );
                 uint8_t val = flatbuffers::GetFieldI<uint8_t>( tbl,*field );
                 lua_pushboolean( L,val );
             }break;
@@ -993,7 +995,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
 int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
     const reflection::Type *type,flatbuffers::Verifier &vfer,const flatbuffers::VectorOfAny *vec )
 {
-/* GetAnyVectorElemI  do the same job,just a little slow */
+/* GetAnyVectorElemI do the same job,just a little slow */
 #define VECTOR_GET(T) flatbuffers::ReadScalar<T>(vec->Data() + sz * index)
 
 #define INTEGER_VECTOR(T)    \

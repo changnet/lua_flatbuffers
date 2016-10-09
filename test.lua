@@ -74,8 +74,30 @@ local tbl =
     double_max = 998.893837464,
 }
 
-local buffer = lfb:encode( "test.bfbs","scalar_types",tbl )
-print( "decode done",string.len(buffer),buffer )
+print( "start test scalar_struct ..." )
+local buffer = lfb:encode( "test.bfbs","scalar_struct",tbl )
+print( "decode done",string.len(buffer) )
 
-local after_tbl = lfb:decode( "test.bfbs","scalar_types",buffer )
+local after_tbl = lfb:decode( "test.bfbs","scalar_struct",buffer )
 vd( after_tbl )
+print( "end test scalar_struct ..." )
+
+print( "start test scalar_table ..." )
+local buffer = lfb:encode( "test.bfbs","scalar_table",tbl )
+print( "decode done",string.len(buffer) )
+
+local after_tbl = lfb:decode( "test.bfbs","scalar_table",buffer )
+vd( after_tbl )
+print( "end test scalar_table ..." )
+
+local test_struct_tbl = {}
+test_struct_tbl.x = 9874310
+test_struct_tbl.y = 32101234
+test_struct_tbl.sub_struct = tbl
+print( "start test test_struct ..." )
+local buffer = lfb:encode( "test.bfbs","test_struct",test_struct_tbl )
+print( "decode done",string.len(buffer) )
+
+local after_tbl = lfb:decode( "test.bfbs","test_struct",buffer )
+vd( after_tbl )
+print( "end test test_struct ..." )

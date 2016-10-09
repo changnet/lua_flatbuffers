@@ -1,6 +1,34 @@
 include "monster_test.fbs";
 
-struct scalar_types
+struct scalar_struct
+{
+	bool_min:bool;
+	bool_max:bool;
+	int8_min:byte;
+	int8_max:byte;
+	uint8_min:ubyte;
+	uint8_max:ubyte;
+
+	int16_min:short;
+	int16_max:short;
+	uint16_min:ushort;
+	uint16_max:ushort;
+
+	int32_min:int;
+	int32_max:int;
+	uint32_min:uint;
+	uint32_max:uint;
+
+	int64_min:long;
+	int64_max:long;
+	uint64_min:ulong;
+	uint64_max:ulong;
+
+	double_min:double;
+	double_max:double;
+}
+
+table scalar_table
 {
 	bool_min:bool;
 	bool_max:bool;
@@ -30,45 +58,29 @@ struct scalar_types
 
 struct test_struct
 {
-	nested_struct:scalar_types;
-}
-
-table vec
-{
 	x:int;
 	y:int;
-	z:int;
+	sub_struct:scalar_struct;
 }
 
-struct stc
-{
-	x:int;
-	y:int;
-	z:int;
-}
+table u_one { x:int;    }
+table u_two { y:bool;   }
+table u_thr { z:string; }
+
+// only tables can be union elements
+union mix_uion { u_one,u_two,u_thr }
 
 // vector of union types not supported (wrap in table first)
 table test_table
 {
-	scalar:scalar_types;
 	str:string;
-	utest:MyGame.Example.Any;
-	vstr:[string];
-	vtable:[vec];
-	vstruct:[stc];
+	sub_struct:scalar_struct;
+	sub_table:scalar_table;
+	sub_uion:mix_uion;
+	vec_str:[string];
+	vec_table:[scalar_table];
+	vec_struct:[scalar_struct];
 }
-
-// only tables can be union elements
-union mix_uion { test_table }
-
-table test
-{
-	test1:test_struct;
-	test2:test_table;
-	mix_uions:mix_uion;
-}
-
-root_type test;
 
 file_extension "bfbs";
 
