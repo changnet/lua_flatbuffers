@@ -73,7 +73,7 @@ local tbl =
     double_min = 998.893837464,
     double_max = 998.893837464,
 }
-
+--[[
 print( "start test scalar_struct ..." )
 local buffer = lfb:encode( "test.bfbs","scalar_struct",tbl )
 print( "decode done",string.len(buffer) )
@@ -101,3 +101,60 @@ print( "decode done",string.len(buffer) )
 local after_tbl = lfb:decode( "test.bfbs","test_struct",buffer )
 vd( after_tbl )
 print( "end test test_struct ..." )
+]]
+
+local test_table_tbl = {}
+test_table_tbl.str = "abcdefghijklmnopqrstuvwxyz0123456789/*-+测试中文字符串"
+test_table_tbl.subxx_struct = tbl
+test_table_tbl.sub_table  = tbl
+
+test_table_tbl.sub_uion      = { z = "string" }
+test_table_tbl.sub_uion_type = 3
+test_table_tbl.vec_str       = { "abc","def","dfghijk" }
+
+test_table_tbl.vec_table     =
+{
+    {
+        bool_min = false,
+        bool_max = true,
+        int8_min = -128,
+        int8_max = 128,
+        uint8_min = 223,
+        uint8_max = 223
+    },
+
+    {
+        int16_min = 224,
+        int16_max = 224,
+        uint16_min = 225,
+        uint16_max = 225,
+
+        int32_min = 2234556,
+        int32_max = 2234556,
+        uint32_min = 12345567,
+        uint32_max = 12345567
+    },
+
+    {
+        int64_min = 99887766,
+        int64_max = 99887766,
+        uint64_min = 68932345,
+        uint64_max = 68932345,
+
+        float_min = 998998.12334567,
+        float_max = 998998.987654321,
+
+        double_min = 998.893837464,
+        double_max = 998.893837464
+    }
+}
+
+test_table_tbl.vec_struct = { tbl,tbl,tbl }
+
+print( "start test test_table ..." )
+local buffer = lfb:encode( "test.bfbs","test_table",test_table_tbl )
+print( "decode done",string.len(buffer) )
+
+local after_tbl = lfb:decode( "test.bfbs","test_table",buffer )
+vd( after_tbl )
+print( "end test test_table ..." )

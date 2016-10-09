@@ -155,6 +155,14 @@ int lflatbuffers::encode_struct(uint8_t *buffer,
         flatbuffers::WriteScalar(data, static_cast<T>(val));\
     }while(0)
 
+    if ( lua_gettop( L ) > MAX_LUA_STACK )
+    {
+        ERROR_WHAT( "lua stack overflow" );
+
+        return -1;
+    }
+    lua_checkstack( L,2 ); /* stack need to iterate lua table */
+
     assert( object->is_struct() );
 
     assert( lua_gettop( L ) == index );
@@ -256,6 +264,14 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
 #define CREATE_STRING_VECTOR(T) \
     CREATE_VECTOR(T,string,TYPE_CHECK,CreateVectorOfStrings)
 
+    if ( lua_gettop( L ) > MAX_LUA_STACK )
+    {
+        ERROR_WHAT( "lua stack overflow" );
+
+        return -1;
+    }
+    lua_checkstack( L,2 ); /* stack need to iterate lua table */
+
     /* element type could be scalar、table、struct、string */
     const auto type = field->type();
     switch( type->element() )
@@ -289,8 +305,6 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
             auto *sub_object = schema->objects()->Get( type->index() );
             if ( sub_object->is_struct() )
             {
-                assert( sub_object->bytesize() == field->offset() );
-
                 /* when create vector,flatbuffers need to know element size and
                  * vector length to align
                  */
@@ -362,15 +376,16 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
 int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
+/* this macro contain continue,don't use do ... while(0) */
 #define CHECK_FIELD()   \
-    do{\
+    {\
         lua_getfield( L,index,field->name()->c_str() );\
         if ( lua_isnil( L,index + 1 ) )\
         {\
             lua_pop( L,1 );\
             continue; /* all field in table is optional */\
         }\
-    }while(0)
+    }
 
 #define TYPE_CHECK(TYPE)    \
     do{\
@@ -397,10 +412,20 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
 
     assert( !object->is_struct() ); /* call encode struct insted */
 
+
+    if ( lua_gettop( L ) > MAX_LUA_STACK )
+    {
+        ERROR_WHAT( "lua stack overflow" );
+
+        return -1;
+    }
+    lua_checkstack( L,2 ); /* stack need to iterate lua table */
+
     /* flatbuffers has to build in post-order.this make code a little mess up.
      * we have to iterate fields to built nested field first,to avoid memory
-     * allocate,we do't use std::vector< std::pair<uint16_t,flatbuffers::uoffset_t> >
-     * one object may contain MAX_NESTED(128) nested fields max.
+     * allocate,we use array insted of
+     * std::vector< std::pair<uint16_t,flatbuffers::uoffset_t> >
+     * so one object may contain MAX_NESTED(128) nested fields max.
      */
     typedef struct { uint16_t offset;flatbuffers::uoffset_t uoffset; } offset_pair;
 
@@ -508,6 +533,13 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                     return      -1;
                 }
             }break;
+        }
+
+        if ( nested_count >= MAX_NESTED )
+        {
+            ERROR_WHAT( "too many nested field" );
+            lua_pop( L,1 );
+            return      -1;
         }
 
         auto &nf   = nested_offset[nested_count];
