@@ -343,7 +343,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
                     lua_pop( L,1 );
                 }
 
-                return 0;
+                break;
             }
 
             /* handle table vector here */
@@ -359,6 +359,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
                 }
 
                 lua_pop( L,1 );
+                offsets.push_back( sub_offset );
             }
             offset = _fbb.CreateVector( offsets ).o;
         }break;
@@ -727,7 +728,11 @@ int lflatbuffers::decode( lua_State *L,
      */
     const void* root = flatbuffers::GetRoot<void>(buffer);
 
+/* release -Wunused-variable */
+#ifndef NDEBUG
     int top = lua_gettop( L );
+#endif
+
     if ( decode_object( L,_schema,_object,vfer,root ) < 0 )
     {
         _error_collector.schema = schema;

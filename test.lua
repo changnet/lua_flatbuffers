@@ -104,12 +104,12 @@ print( "end test test_struct ..." )
 ]]
 
 local test_table_tbl = {}
-test_table_tbl.str = "abcdefghijklmnopqrstuvwxyz0123456789/*-+测试中文字符串"
+test_table_tbl.str = "abcdefghijklmnopqrstuvwxyz0123456789/*-+测试中文字符串UTF8"
 test_table_tbl.subxx_struct = tbl
 test_table_tbl.sub_table  = tbl
 
-test_table_tbl.sub_uion      = { z = "string" }
-test_table_tbl.sub_uion_type = 3
+test_table_tbl.sub_uion      = { y = false }
+test_table_tbl.sub_uion_type = 2   -- you have to specific a uion type
 test_table_tbl.vec_str       = { "abc","def","dfghijk" }
 
 test_table_tbl.vec_table     =
@@ -158,3 +158,53 @@ print( "decode done",string.len(buffer) )
 local after_tbl = lfb:decode( "test.bfbs","test_table",buffer )
 vd( after_tbl )
 print( "end test test_table ..." )
+
+
+print( "start simple benchmark test" )
+local max = 100000
+
+local x = os.clock()
+
+el_tbl =
+{
+    int8_min = -128,
+    int8_max = 128,
+    uint8_min = 256,
+    uint8_max = 256,
+    int16_min = 256,
+    int16_max = 256,
+    uint16_min = 256,
+    uint16_max = 256,
+    int32_min = 256,
+    int32_max = 256,
+    uint32_min = 256,
+    uint32_max = 256,
+    int64_min = 256,
+    int64_max = 256,
+    uint64_min = 256,
+    uint64_max = 256,
+    double_min = 256,
+    double_max = 256,
+    -- str = "abcdefghijklmnopqrstuvwxyz0123456789",
+}
+local ptbl = {}
+ptbl.el    = { el_tbl,el_tbl,el_tbl,el_tbl,el_tbl }
+
+local buffer
+for index = 1,max do
+    buffer = lfb:encode( "test.bfbs","test",ptbl )
+end
+local y = os.clock()
+print( "end simple encode benchmark test",
+    string.format("%d times elapsed time: %.2f\n",max,y - x))
+
+local x = os.clock()
+local pafter_tbl
+for index = 1,max do
+    pafter_tbl = lfb:decode( "test.bfbs","test",buffer )
+end
+local y = os.clock()
+print( "end simple decode benchmark test",
+    string.format("%d times elapsed time: %.2f\n",max,y - x))
+
+--vd( lfb:decode( "test.bfbs","test",buffer ) )

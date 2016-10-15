@@ -6,14 +6,14 @@ TARGET_FBB =        flatbuffers
 TARGET_SO =         lua_flatbuffers.so
 TARGET_A  =         liblua_flatbuffers.a
 PREFIX =            /usr/local
-CFLAGS =            -g3 -Wall -pedantic -fno-inline
-#CFLAGS =            -O2 -Wall -pedantic -DNDEBUG
+#CFLAGS =            -g3 -Wall -pedantic -fno-inline
+CFLAGS =            -O2 -Wall -pedantic -DNDEBUG
 
 LUA_INCLUDE_DIR =   $(PREFIX)/include
 
 LUA_FLATBUFFERS_DEPS = -lflatbuffers
-LUA_FLATBUFFERS_CFLAGS =      -fpic
-LUA_FLATBUFFERS_LDFLAGS =     -shared
+LUA_FLATBUFFERS_CFLAGS = -fpic
+LUA_FLATBUFFERS_LDFLAGS = -shared
 
 AR= ar rcu
 RANLIB= ranlib
