@@ -27,7 +27,7 @@ OBJS =              lflatbuffers.o
 
 all: $(TARGET_SO)
 
-build: $(TARGET_FBB)
+build: $(TARGET_FBB) $(TARGET_A)
 
 $(TARGET_FBB):flatbuffers-1.4.0.tar.gz
 	tar -zxvf flatbuffers-1.4.0.tar.gz

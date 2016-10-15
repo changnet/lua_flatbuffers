@@ -148,16 +148,16 @@ test_table_tbl.vec_table     =
         double_max = 998.893837464
     }
 }
-
-test_table_tbl.vec_struct = { tbl,tbl,tbl }
-
-print( "start test test_table ..." )
-local buffer = lfb:encode( "test.bfbs","test_table",test_table_tbl )
-print( "decode done",string.len(buffer) )
-
-local after_tbl = lfb:decode( "test.bfbs","test_table",buffer )
-vd( after_tbl )
-print( "end test test_table ..." )
+--
+-- test_table_tbl.vec_struct = { tbl,tbl,tbl }
+--
+-- print( "start test test_table ..." )
+-- local buffer = lfb:encode( "test.bfbs","test_table",test_table_tbl )
+-- print( "decode done",string.len(buffer) )
+--
+-- local after_tbl = lfb:decode( "test.bfbs","test_table",buffer )
+-- vd( after_tbl )
+-- print( "end test test_table ..." )
 
 
 print( "start simple benchmark test" )
@@ -197,14 +197,14 @@ end
 local y = os.clock()
 print( "end simple encode benchmark test",
     string.format("%d times elapsed time: %.2f\n",max,y - x))
-
-local x = os.clock()
-local pafter_tbl
-for index = 1,max do
-    pafter_tbl = lfb:decode( "test.bfbs","test",buffer )
-end
-local y = os.clock()
-print( "end simple decode benchmark test",
-    string.format("%d times elapsed time: %.2f\n",max,y - x))
+--
+-- local x = os.clock()
+-- local pafter_tbl
+-- for index = 1,max do
+--     pafter_tbl = lfb:decode( "test.bfbs","test",buffer )
+-- end
+-- local y = os.clock()
+-- print( "end simple decode benchmark test",
+--     string.format("%d times elapsed time: %.2f\n",max,y - x))
 
 --vd( lfb:decode( "test.bfbs","test",buffer ) )
