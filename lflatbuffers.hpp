@@ -14,6 +14,15 @@ extern int luaopen_lua_flatbuffers( lua_State *L );
 #include <string>
 #include <unordered_map>
 
+#define MAX_NESTED 128
+#define UNION_KEY_LEN 64
+#define MAX_LUA_STACK 256
+#define LIB_NAME "lua_flatbuffers"
+
+#define ERROR_WHAT(x)   _error_collector.what = x
+#define ERROR_APPEND(x) _error_collector.what.append(x)
+#define ERROR_TRACE(x)  _error_collector.backtrace.push_back(x)
+
 class lflatbuffers
 {
 public:

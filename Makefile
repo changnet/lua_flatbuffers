@@ -18,14 +18,19 @@ LUA_FLATBUFFERS_LDFLAGS = -shared
 AR= ar rcu
 RANLIB= ranlib
 
-OBJS =              lflatbuffers.o
+OBJS =              lflatbuffers.o lflatbuffers_encode.o lflatbuffers_decode.o
+
+DEPS := $(OBJS:.o=.d)
 
 .PHONY: all clean test build
 
 .cpp.o:
-	$(CC) -c $(CFLAGS) $(LUA_FLATBUFFERS_CFLAGS) -o $@ $<
+	$(CC) -c $(CFLAGS) $(LUA_FLATBUFFERS_CFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -o $@ $<
 
 all: $(TARGET_SO)
+
+#The dash at the start of '-include' tells Make to continue when the .d file doesn't exist (e.g. on first compilation)
+-include $(DEPS)
 
 build: $(TARGET_FBB) $(TARGET_A)
 
@@ -45,4 +50,4 @@ test:
 	lua test.lua
 
 clean:
-	rm -f *.o $(TARGET_SO) $(TARGET_A)
+	rm -f *.o *.d $(TARGET_SO) $(TARGET_A)
