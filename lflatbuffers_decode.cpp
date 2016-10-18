@@ -71,7 +71,7 @@ int lflatbuffers::decode( lua_State *L,
     return 0;
 }
 
-int lflatbuffers::decode_object( lua_State *L,const reflection::Schema *schema,
+inline int lflatbuffers::decode_object( lua_State *L,const reflection::Schema *schema,
     const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root )
 {
     if ( object->is_struct() ) return decode_struct( L,schema,object,vfer,root );

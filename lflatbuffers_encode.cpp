@@ -483,7 +483,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
 }
 
 /* encode into a flatbuffers object( struct or table ) */
-int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
+inline int lflatbuffers::encode_object( flatbuffers::uoffset_t &offset,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
 
