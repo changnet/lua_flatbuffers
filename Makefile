@@ -22,7 +22,7 @@ OBJS =              lflatbuffers.o lflatbuffers_encode.o lflatbuffers_decode.o
 
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean test build
+.PHONY: all clean test buildfbb
 
 .cpp.o:
 	$(CC) -c $(CFLAGS) $(LUA_FLATBUFFERS_CFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -o $@ $<
@@ -32,12 +32,13 @@ all: $(TARGET_SO) $(TARGET_A)
 #The dash at the start of '-include' tells Make to continue when the .d file doesn't exist (e.g. on first compilation)
 -include $(DEPS)
 
-build: $(TARGET_FBB)
+buildfbb: $(TARGET_FBB)
 
 $(TARGET_FBB):flatbuffers-1.4.0.tar.gz
 	tar -zxvf flatbuffers-1.4.0.tar.gz
-	$(CMAKE) -G flatbuffers-1.4.0
+	$(CMAKE) -G "Unix Makefiles" -DFLATBUFFERS_BUILD_SHAREDLIB=ON flatbuffers-1.4.0
 	$(MAKE) -C flatbuffers-1.4.0 all
+	$(MAKE) -C flatbuffers-1.4.0 install
 
 $(TARGET_SO): $(OBJS)
 	$(CC) $(LDFLAGS) $(LUA_FLATBUFFERS_LDFLAGS) -o $@ $(OBJS) $(LUA_FLATBUFFERS_DEPS)
@@ -47,6 +48,7 @@ $(TARGET_A): $(OBJS)
 	$(RANLIB) $@
 
 test:
+	flatc -b --schema monster_test.fbs
 	lua test.lua
 
 clean:

@@ -111,5 +111,5 @@ for index = 1,max do
 end
 local ey = os.clock()
 
-print( string.format("simple benchmark test %d times,encode elapsed time: %.2f,decode elapsed time: %.2f",
+print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
     max,sy - sx,ey - ex))
