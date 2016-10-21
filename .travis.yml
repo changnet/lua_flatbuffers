@@ -7,6 +7,7 @@ before_install:
 
 install:
     - cd $TRAVIS_BUILD_DIR
+    - make buildfbb
     - make all
 
 script:
