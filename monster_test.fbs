@@ -4,7 +4,7 @@
 
 namespace MyGame.Example2;
 
-table Monster {}  // Test having same name as below, but in different namespace.
+//table Monster {}  // Test having same name as below, but in different namespace.
 
 namespace MyGame.Example;
 
@@ -12,7 +12,7 @@ attribute "priority";
 
 enum Color:byte (bit_flags) { Red = 0, Green, Blue = 3, }
 
-union Any { Monster, TestSimpleTableWithEnum, MyGame.Example2.Monster }
+union Any { Monster, TestSimpleTableWithEnum }
 
 struct Test { a:short; b:byte; }
 

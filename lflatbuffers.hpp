@@ -47,14 +47,14 @@ private:
 
     int encode_vector( flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Field *field,int index );
-    int encode_struct(uint8_t *buffer,
+    int encode_struct( flatbuffers::uoffset_t &offset,
+        const reflection::Schema *schema,const reflection::Object *object,int index );
+    int do_encode_struct( uint8_t *buffer,
         const reflection::Schema *schema,const reflection::Object *object,int index );
     int encode_table( flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Object *object,int index );
-    inline int encode_object( flatbuffers::uoffset_t &offset,
-        const reflection::Schema *schema,const reflection::Object *object,int index );
 
-    inline int decode_object( lua_State *L,const reflection::Schema *schema,
+    int decode_object( lua_State *L,const reflection::Schema *schema,
         const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
     int decode_struct( lua_State *L,const reflection::Schema *schema,
         const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );

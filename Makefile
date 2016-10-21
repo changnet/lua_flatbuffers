@@ -27,12 +27,12 @@ DEPS := $(OBJS:.o=.d)
 .cpp.o:
 	$(CC) -c $(CFLAGS) $(LUA_FLATBUFFERS_CFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -o $@ $<
 
-all: $(TARGET_SO)
+all: $(TARGET_SO) $(TARGET_A)
 
 #The dash at the start of '-include' tells Make to continue when the .d file doesn't exist (e.g. on first compilation)
 -include $(DEPS)
 
-build: $(TARGET_FBB) $(TARGET_A)
+build: $(TARGET_FBB)
 
 $(TARGET_FBB):flatbuffers-1.4.0.tar.gz
 	tar -zxvf flatbuffers-1.4.0.tar.gz
