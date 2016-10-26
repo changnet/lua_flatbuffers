@@ -1,5 +1,6 @@
 lua_flatbuffers
 ================
+[![Build Status](https://travis-ci.org/changnet/lua_flatbuffers.svg?branch=master)](https://travis-ci.org/changnet/lua_flatbuffers)
 
 a lua google flatbuffers encode/decode module base on google flatbuffers reflection  
 See more about google flatbuffers at http://google.github.io/flatbuffers/  
@@ -19,7 +20,7 @@ Installation
 
 Make sure lua and FlatBuffers develop environment already installed
 
- * Run 'git clone https://github.com/changnet/lua_parson.git'
+ * Run 'git clone https://github.com/changnet/lua_flatbuffers.git'
  * Run 'cd lua_flatbuffers'
  * Run 'make'
  * Run 'make test' to test
