@@ -1,6 +1,7 @@
 # ref: http://docs.travis-ci.com/user/build-configuration
 
 language: cpp
+sudo: required
 compiler:
     - gcc
 
