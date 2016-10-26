@@ -12,8 +12,6 @@ before_install:
     - export CXX="g++-4.8"
     - sudo rm /usr/bin/g++
     - sudo ln -s /usr/bin/g++-4.8 /usr/bin/g++
-    - g++ --version
-    - $(CXX) --version
     - wget "http://www.lua.org/ftp/lua-5.3.2.tar.gz" && tar xzf lua-5.3.2.tar.gz && cd lua-5.3.2 && sudo make linux test install;
 
 install:
