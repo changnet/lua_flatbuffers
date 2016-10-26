@@ -128,6 +128,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
         lua_pushnil( L );\
         while( lua_next( L,index ) )\
         {\
+            TC( TYPE );\
             vt.push_back( static_cast<T>(lua_to##TYPE(L,-1)) );\
             lua_pop( L,1 );\
         }\
@@ -160,8 +161,6 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
         case reflection::Bool:  CREATE_BOOLEAN_VECTOR(bool);break;
         case reflection::String:CREATE_STRING_VECTOR(std::string);break;
         case reflection::UType: CREATE_NUMBER_VECTOR(uint8_t );break;
-        case reflection::Byte:  CREATE_NUMBER_VECTOR(int8_t  );break;
-        case reflection::UByte: CREATE_NUMBER_VECTOR(uint8_t );break;
         case reflection::Short: CREATE_NUMBER_VECTOR(int16_t );break;
         case reflection::UShort:CREATE_NUMBER_VECTOR(uint16_t);break;
         case reflection::Int:   CREATE_NUMBER_VECTOR(int32_t );break;
@@ -170,15 +169,20 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
         case reflection::ULong: CREATE_NUMBER_VECTOR(uint64_t);break;
         case reflection::Float: CREATE_NUMBER_VECTOR(float   );break;
         case reflection::Double:CREATE_NUMBER_VECTOR(double  );break;
+        case reflection::Byte:
+        case reflection::UByte:
+        {
+            TYPE_CHECK( string );
+
+            size_t sz = 0;
+            const char *str = lua_tolstring( L,index,&sz );
+            /* in lua,[byte] or [ubyte] can hold binary data and string,but not
+             * a number vector.so int8_t or uint8_t is the same
+             */
+            offset = _fbb.CreateVector( reinterpret_cast<const uint8_t*>(str),sz ).o;
+        }break;
         case reflection::Obj:
         {
-            if ( !lua_istable( L,index ) )
-            {
-                ERROR_WHAT( "vector element expect table,got " );
-                ERROR_APPEND( lua_typename(L, lua_type(L, -1)) );
-                lua_pop(L,1); return -1;
-            }
-
             auto *sub_object = schema->objects()->Get( type->index() );
             if ( sub_object->is_struct() )
             {
@@ -206,6 +210,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
                 lua_pushnil( L );
                 while ( lua_next( L,index ) )
                 {
+                    TYPE_CHECK( table );
                     uint8_t *sub_buffer = buffer + bytesize*sub_index;
                     if ( do_encode_struct( sub_buffer,schema,sub_object,index + 2 ) < 0 )
                     {
@@ -228,6 +233,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
             lua_pushnil( L );
             while ( lua_next( L,index ) )
             {
+                TYPE_CHECK( table );
                 flatbuffers::uoffset_t sub_offset = 0;
                 if ( encode_table( sub_offset,schema,sub_object,index + 2 ) < 0 )
                 {
@@ -271,6 +277,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
         {\
             ERROR_WHAT( "expect "#TYPE",got " );\
             ERROR_APPEND( lua_typename(L, lua_type(L, index + 1)) );\
+            ERROR_TRACE( field->name()->c_str() );\
             lua_pop(L,1); return -1;\
         }\
     }while(0)
@@ -318,7 +325,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
 
         const auto type = field->type();
         flatbuffers::uoffset_t one_nested_offset = 0;
-        switch ( field->type()->base_type() )
+        switch ( type->base_type() )
         {
             case reflection::None: assert( false );break;
             /* we handle scalar type later */
@@ -347,10 +354,20 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
             case reflection::Vector:
             {
                 CHECK_FIELD();
-                TYPE_CHECK(table);
+
+                int element = type->element();
+                if ( reflection::Byte == element || reflection::UByte == element )
+                {
+                    TYPE_CHECK(string);
+                }
+                else
+                {
+                    TYPE_CHECK(table);
+                }
 
                 if ( encode_vector( one_nested_offset,schema,field,index + 1 ) < 0 )
                 {
+                    ERROR_TRACE( field->name()->c_str() );
                     lua_pop( L,1 );
                     return      -1;
                 }
@@ -374,6 +391,8 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                 {
                     ERROR_WHAT( "union type not specified,expect integer,got " );
                     ERROR_APPEND( lua_typename(L, lua_type(L, index + 2)) );
+                    ERROR_TRACE( field->name()->c_str() );
+
                     lua_pop(L,2); return -1;
                 }
 
@@ -388,6 +407,8 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                 if ( !enumval )
                 {
                     ERROR_WHAT( "no such union type" );
+                    ERROR_TRACE( field->name()->c_str() );
+
                     lua_pop(L,2); return -1;
                 }
 
@@ -419,6 +440,8 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
         if ( nested_count >= MAX_NESTED )
         {
             ERROR_WHAT( "too many nested field" );
+            ERROR_TRACE( field->name()->c_str() );
+
             lua_pop( L,1 );
             return      -1;
         }

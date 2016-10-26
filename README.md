@@ -56,3 +56,4 @@ Note
 1. namespace not supported! you have to put objects with same name in different
 schema file,though they are in different namespace.
 2. deprecated field still be encode or decode.
+3. [byte] or [ubyte] will be encode as lua string

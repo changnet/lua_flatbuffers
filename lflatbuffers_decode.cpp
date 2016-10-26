@@ -399,8 +399,12 @@ int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
     }
 
     lua_checkstack( L,2 ); /* table,val */
-    lua_newtable( L );
-    stack ++;
+
+    if ( reflection::Byte != et && reflection::UByte != et )
+    {
+        lua_newtable( L );
+        stack ++;
+    }
 
     switch( et )
     {
@@ -467,9 +471,14 @@ int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
                 lua_rawseti( L,stack,index + 1 );
             }
         }break;
+        case reflection::Byte  :
+        case reflection::UByte :
+        {
+            /* binary vector,decode as lua string */
+            lua_pushlstring( L,
+                reinterpret_cast<const char*>(vec->Data()),vec->size() );
+        }break;
         case reflection::UType :INTEGER_VECTOR( uint8_t);break;
-        case reflection::Byte  :INTEGER_VECTOR(  int8_t);break;
-        case reflection::UByte :INTEGER_VECTOR( uint8_t);break;
         case reflection::Short :INTEGER_VECTOR( int16_t);break;
         case reflection::UShort:INTEGER_VECTOR(uint16_t);break;
         case reflection::Int   :INTEGER_VECTOR( int32_t);break;

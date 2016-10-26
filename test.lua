@@ -54,7 +54,12 @@ monster.pos       = {x = 1, y = 2, z = 3, test1 = 0, test2 = 1,test3 = {a = 10,b
 monster.mana      = 150
 monster.hp        = 80
 monster.name      = "MyMonster"
-monster.inventory = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }
+
+-- string, which may only hold UTF-8 or 7-bit ASCII. For other text encodings or general binary data use vectors ([byte] or [ubyte]) instead.
+-- in lua,[byte] or [ubyte] can hold binary data and string,but not a number vector.
+-- other language(c++) may hold number vector.if so you have to retrieve data with string.byte
+-- monster.inventory = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }
+monster.inventory = "0123456789"
 
 -- no enum in lua,number insted
 monster.color     = 3 -- Color_Blue
