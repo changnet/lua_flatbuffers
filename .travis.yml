@@ -10,8 +10,8 @@ before_install:
     - sudo apt-get update -qq
     - sudo apt-get install -qq g++-4.8 gcc-4.8
     # make sure cmake use the new version complier
-    - export CC=/usr/local/bin/gcc-4.8
-    - export CXX=/usr/local/bin/g++-4.8
+    - export CC=/usr/bin/gcc-4.8
+    - export CXX=/usr/bin/g++-4.8
 
     - wget "http://www.lua.org/ftp/lua-5.3.2.tar.gz" && tar xzf lua-5.3.2.tar.gz && cd lua-5.3.2 && sudo make linux test install;
 
