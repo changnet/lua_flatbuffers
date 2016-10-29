@@ -1,7 +1,7 @@
 ##### Build defaults #####
 CMAKE = cmake
 MAKE = make
-CC = g++ -std=c++11
+CXX = g++ -std=c++11
 TARGET_FBB =        flatbuffers
 TARGET_SO =         lua_flatbuffers.so
 TARGET_A  =         liblua_flatbuffers.a
@@ -25,7 +25,7 @@ DEPS := $(OBJS:.o=.d)
 .PHONY: all clean test buildfbb
 
 .cpp.o:
-	$(CC) -c $(CFLAGS) $(LUA_FLATBUFFERS_CFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -o $@ $<
+	$(CXX) -c $(CFLAGS) $(LUA_FLATBUFFERS_CFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -o $@ $<
 
 all: $(TARGET_SO) $(TARGET_A)
 
@@ -41,7 +41,7 @@ $(TARGET_FBB):flatbuffers-1.4.0.tar.gz
 	$(MAKE) -C flatbuffers-1.4.0 install
 
 $(TARGET_SO): $(OBJS)
-	$(CC) $(LDFLAGS) $(LUA_FLATBUFFERS_LDFLAGS) -o $@ $(OBJS) $(LUA_FLATBUFFERS_DEPS)
+	$(CXX) $(LDFLAGS) $(LUA_FLATBUFFERS_LDFLAGS) -o $@ $(OBJS) $(LUA_FLATBUFFERS_DEPS)
 
 $(TARGET_A): $(OBJS)
 	$(AR) $@ $(OBJS)
