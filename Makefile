@@ -36,7 +36,7 @@ buildfbb: $(TARGET_FBB)
 
 $(TARGET_FBB):flatbuffers-1.4.0.tar.gz
 	tar -zxvf flatbuffers-1.4.0.tar.gz
-	$(CMAKE) -G "Unix Makefiles" -DFLATBUFFERS_BUILD_SHAREDLIB=ON flatbuffers-1.4.0 -Bflatbuffers-1.4.0
+	$(CMAKE) -DFLATBUFFERS_BUILD_SHAREDLIB=ON flatbuffers-1.4.0 -Bflatbuffers-1.4.0
 	$(MAKE) -C flatbuffers-1.4.0 all
 	$(MAKE) -C flatbuffers-1.4.0 install
 
