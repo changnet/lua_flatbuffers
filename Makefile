@@ -35,7 +35,8 @@ all: $(TARGET_SO) $(TARGET_A)
 
 buildfbb: $(TARGET_FBB)
 
-$(TARGET_FBB):flatbuffers-1.4.0.tar.gz
+$(TARGET_FBB):
+	wget https://github.com/google/flatbuffers/archive/v1.4.0.tar.gz -Oflatbuffers-1.4.0.tar.gz
 	tar -zxvf flatbuffers-1.4.0.tar.gz
 	$(CMAKE) -DCMAKE_CXX_FLAGS=-fPIC flatbuffers-1.4.0 -Bflatbuffers-1.4.0
 	$(MAKE) -C flatbuffers-1.4.0 all
