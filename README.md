@@ -9,11 +9,10 @@ Dependency
 -------------
 * lua >=5.3.0(http://www.lua.org/)
 * FlatBuffers >=1.4.0(https://github.com/google/flatbuffers/releases)
-* linux(g++ support c++ 11)
+* linux(g++ support c++11)
 
-FlatBuffers must be built with option -DFLATBUFFERS_BUILD_SHAREDLIB=ON,old version
-(including 1.4.0) do not have this option in CMakeLists.txt.you have to build FlatBuffers
-shared library manually.
+make sure flatbuffers static library is built with -fPIC.run cmake with optional
+'-DCMAKE_CXX_FLAGS=-fPIC'
 
 Installation
 ------------
