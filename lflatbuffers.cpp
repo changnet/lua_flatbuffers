@@ -100,7 +100,9 @@ bool lflatbuffers::load_bfbs_file( const char *file )
 const char *lflatbuffers::last_error()
 {
     std::string &buffer = _error_collector.buffer;
-    buffer = _error_collector.what;
+
+    buffer.clear();
+    buffer.append( _error_collector.what );
 
     buffer.append( " at (" );
     buffer.append( _error_collector.schema );
@@ -114,7 +116,7 @@ const char *lflatbuffers::last_error()
         buffer.append( *itr );
     }
 
-    return buffer.c_str();
+    return _error_collector.buffer.c_str();
 }
 
 /* ========================== static function for lua ======================= */
