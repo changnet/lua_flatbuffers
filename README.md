@@ -11,8 +11,7 @@ Dependency
 * FlatBuffers >=1.4.0(https://github.com/google/flatbuffers/releases)
 * linux(g++ support c++11)
 
-make sure flatbuffers static library is built with -fPIC.run cmake with optional
-'-DCMAKE_CXX_FLAGS=-fPIC'
+make sure flatbuffers shared library is built if you need to build the lua_flatbuffers.so.
 
 Installation
 ------------
