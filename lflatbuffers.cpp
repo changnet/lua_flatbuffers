@@ -31,6 +31,16 @@ static int is_suffix_file( const char *path,const char *suffix )
 /* load all the schema files in this directory */
 int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
 {
+    char file_path[PATH_MAX];
+    int sz = snprintf( file_path,PATH_MAX,"%s/",path );
+    if ( sz <= 0 )
+    {
+        ERROR_WHAT( "path too long:" );
+        ERROR_APPEND( path );
+
+        return -1;
+    }
+
     DIR *dir = opendir( path );
     if ( !dir )
     {
@@ -49,19 +59,26 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
         struct stat path_stat;
         stat( dt->d_name, &path_stat );
 
-        /* dt->d_type == DT_REG not supported by all file system types */
-        if ( S_ISREG( path_stat.st_mode ) //This is a regular file
-            && is_suffix_file( dt->d_name,suffix) )
+        /* S_ISREG( path_stat.st_mode ) always return false in a virtualbox
+         * shared folder.don't know why yet!
+         */
+        if ( !S_ISDIR( path_stat.st_mode )
+            && is_suffix_file( dt->d_name,suffix ) )
         {
-            if ( !load_bfbs_file( dt->d_name ) )
+            snprintf( file_path + sz,PATH_MAX,"%s",dt->d_name );
+            if ( !load_bfbs_file( file_path ) )
             {
                 _bfbs_buffer.clear();
-                return -1;
+
+                closedir( dir );
+                return       -1;
             }
             ++ count;
         }
     }
-    return count;
+
+    closedir( dir );
+    return    count;
 }
 
 /* load a binary flatbuffers schema file */
@@ -103,6 +120,11 @@ const char *lflatbuffers::last_error()
 
     buffer.clear();
     buffer.append( _error_collector.what );
+
+    if ( _error_collector.schema.empty() )
+    {
+        return _error_collector.buffer.c_str();
+    }
 
     buffer.append( " at (" );
     buffer.append( _error_collector.schema );
