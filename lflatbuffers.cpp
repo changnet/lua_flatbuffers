@@ -56,16 +56,15 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
     struct dirent *dt = NULL;
     while ( (dt = readdir( dir )) )
     {
-        struct stat path_stat;
-        stat( dt->d_name, &path_stat );
+        snprintf( file_path + sz,PATH_MAX,"%s",dt->d_name );
 
-        /* S_ISREG( path_stat.st_mode ) always return false in a virtualbox
-         * shared folder.don't know why yet!
-         */
-        if ( !S_ISDIR( path_stat.st_mode )
+        struct stat path_stat;
+        stat( file_path, &path_stat );
+
+        if ( S_ISREG( path_stat.st_mode )
             && is_suffix_file( dt->d_name,suffix ) )
         {
-            snprintf( file_path + sz,PATH_MAX,"%s",dt->d_name );
+
             if ( !load_bfbs_file( file_path ) )
             {
                 _bfbs_buffer.clear();
