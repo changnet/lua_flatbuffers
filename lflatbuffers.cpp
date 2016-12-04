@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <libgen.h> /* for basename */
 
 /* check if suffix match */
 static int is_suffix_file( const char *path,const char *suffix )
@@ -83,11 +84,18 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
 /* load a binary flatbuffers schema file */
 bool lflatbuffers::load_bfbs_file( const char *file )
 {
+    /* Both dirname() and basename() may modify the contents of path, so it
+       may be desirable to pass a copy when calling one of these functions.
+     */
+    char file_name[PATH_MAX];
+    snprintf( file_name,PATH_MAX,"%s",file );
+
+    const char *name = basename( file_name );
     /* if the file already loaded,consider it need to update,not dumplicate */
-    std::string &bfbs = _bfbs_buffer[file];
+    std::string &bfbs = _bfbs_buffer[name];
     if ( !flatbuffers::LoadFile( file,true,&bfbs ) )
     {
-        _bfbs_buffer.erase( file );
+        _bfbs_buffer.erase( name );
 
         ERROR_WHAT( "can not load file:" );
         ERROR_APPEND( file );

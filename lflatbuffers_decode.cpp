@@ -7,7 +7,9 @@ int lflatbuffers::decode( lua_State *L,
     auto sch_itr = _bfbs_buffer.find( schema );
     if ( sch_itr == _bfbs_buffer.end() )
     {
-        _error_collector.what = "no such schema";
+        ERROR_WHAT( "no such schema:" );
+        ERROR_APPEND( schema );
+
         return -1;
     }
 
