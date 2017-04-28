@@ -18,12 +18,12 @@ Installation
 
 Make sure lua and FlatBuffers develop environment already installed
 
- * Run 'git clone https://github.com/changnet/lua_flatbuffers.git'
- * Run 'cd lua_flatbuffers'
- * Run 'make'
- * Run 'make test' to test
+ * git clone https://github.com/changnet/lua_flatbuffers.git
+ * cd lua_flatbuffers
+ * (make buildfbb will install FlatBuffers)
+ * make
+ * make test
  * Copy lua_flatbuffers.so to your lua project's c module directory
-
 or embed to your project
 
 Api
