@@ -1,7 +1,7 @@
 #include "lflatbuffers.hpp"
 
 
-int lflatbuffers::do_encode_struct(uint8_t *buffer,
+int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *buffer,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
 #define SET_INTEGER(T)   \
@@ -73,7 +73,7 @@ int lflatbuffers::do_encode_struct(uint8_t *buffer,
                 const auto *sub_object = schema->objects()->Get( type->index() );
                 assert( sub_object && sub_object->is_struct() );
 
-                if ( do_encode_struct( data,schema,sub_object,index + 1 ) < 0 )
+                if ( do_encode_struct( L,data,schema,sub_object,index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
                     lua_pop( L,1 );
@@ -108,7 +108,7 @@ int lflatbuffers::do_encode_struct(uint8_t *buffer,
 
 }
 
-int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
+int lflatbuffers::encode_vector( lua_State *L,flatbuffers::uoffset_t &offset,
     const reflection::Schema *schema,const reflection::Field *field,int index )
 {
 #define UNCHECK(TYPE)
@@ -212,7 +212,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
                 {
                     TYPE_CHECK( table );
                     uint8_t *sub_buffer = buffer + bytesize*sub_index;
-                    if ( do_encode_struct( sub_buffer,schema,sub_object,index + 2 ) < 0 )
+                    if ( do_encode_struct( L,sub_buffer,schema,sub_object,index + 2 ) < 0 )
                     {
                         lua_pop( L,2 );
                         return      -1;
@@ -235,7 +235,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
             {
                 TYPE_CHECK( table );
                 flatbuffers::uoffset_t sub_offset = 0;
-                if ( encode_table( sub_offset,schema,sub_object,index + 2 ) < 0 )
+                if ( encode_table( L,sub_offset,schema,sub_object,index + 2 ) < 0 )
                 {
                     lua_pop( L,2 );
                     return      -1;
@@ -257,7 +257,7 @@ int lflatbuffers::encode_vector( flatbuffers::uoffset_t &offset,
 #undef CREATE_STRING_VECTOR
 }
 
-int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
+int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
 /* this macro contain continue,don't use do ... while(0) */
@@ -365,7 +365,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                     TYPE_CHECK(table);
                 }
 
-                if ( encode_vector( one_nested_offset,schema,field,index + 1 ) < 0 )
+                if ( encode_vector( L,one_nested_offset,schema,field,index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
                     lua_pop( L,1 );
@@ -412,7 +412,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                     lua_pop(L,2); return -1;
                 }
 
-                if ( encode_table( one_nested_offset,schema,enumval->object(),index + 1 ) < 0 )
+                if ( encode_table( L,one_nested_offset,schema,enumval->object(),index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
 
@@ -426,7 +426,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                 if ( sub_object->is_struct() ) continue;
 
                 CHECK_FIELD();
-                int rts = encode_table( one_nested_offset,schema,sub_object,index + 1 );
+                int rts = encode_table( L,one_nested_offset,schema,sub_object,index + 1 );
                 if ( rts < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
@@ -477,7 +477,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
                 CHECK_FIELD();
 
                 flatbuffers::uoffset_t offset = 0;
-                if ( encode_struct( offset,schema,sub_object,index + 1 ) < 0 )
+                if ( encode_struct( L,offset,schema,sub_object,index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
 
@@ -525,7 +525,7 @@ int lflatbuffers::encode_table( flatbuffers::uoffset_t &offset,
 
 }
 
-int lflatbuffers::encode_struct( flatbuffers::uoffset_t &offset,
+int lflatbuffers::encode_struct( lua_State *L,flatbuffers::uoffset_t &offset,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
     assert( object->is_struct() );
@@ -535,7 +535,7 @@ int lflatbuffers::encode_struct( flatbuffers::uoffset_t &offset,
      */
     _fbb.StartStruct( object->minalign() );
     uint8_t* buffer = _fbb.ReserveElements( object->bytesize(), 1 );
-    if ( do_encode_struct( buffer,schema,object,index ) < 0 )
+    if ( do_encode_struct( L,buffer,schema,object,index ) < 0 )
     {
         return -1;
     }
@@ -582,8 +582,8 @@ int lflatbuffers::encode( lua_State *L,
     flatbuffers::uoffset_t offset;
 
     int rts = _object->is_struct() ?
-        encode_struct( offset,_schema,_object,index ) :
-        encode_table ( offset,_schema,_object,index ) ;
+        encode_struct( L,offset,_schema,_object,index ) :
+        encode_table ( L,offset,_schema,_object,index ) ;
 
     if ( rts <  0 )
     {

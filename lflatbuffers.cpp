@@ -250,7 +250,7 @@ static int decode( lua_State *L )
 static int __call( lua_State* L )
 {
     /* lua调用__call,第一个参数是该元表所属的table.取构造函数参数要注意 */
-    class lflatbuffers* obj = new class lflatbuffers( L );
+    class lflatbuffers* obj = new class lflatbuffers();
 
     lua_settop( L,1 ); /* 清除所有构造函数参数,只保留元表 */
 

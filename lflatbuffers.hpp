@@ -26,8 +26,6 @@ extern int luaopen_lua_flatbuffers( lua_State *L );
 class lflatbuffers
 {
 public:
-    ~lflatbuffers() {}
-    explicit lflatbuffers( lua_State *L ) : L(L) {}
     int encode( lua_State *L,const char *schema,const char *object,int index );
     int decode( lua_State *L,const char *schema,const char *object,const char *buffer,size_t sz );
 
@@ -45,13 +43,13 @@ private:
         std::vector< std::string > backtrace;
     } _error_collector;
 
-    int encode_vector( flatbuffers::uoffset_t &offset,
+    int encode_vector( lua_State *L,flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Field *field,int index );
-    int encode_struct( flatbuffers::uoffset_t &offset,
+    int encode_struct( lua_State *L,flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Object *object,int index );
-    int do_encode_struct( uint8_t *buffer,
+    int do_encode_struct( lua_State *L,uint8_t *buffer,
         const reflection::Schema *schema,const reflection::Object *object,int index );
-    int encode_table( flatbuffers::uoffset_t &offset,
+    int encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Object *object,int index );
 
     int decode_object( lua_State *L,const reflection::Schema *schema,
@@ -63,7 +61,6 @@ private:
     int decode_vector( lua_State *L,const reflection::Schema *schema,
         const reflection::Type *type,flatbuffers::Verifier &vfer,const flatbuffers::VectorOfAny *vec );
 private:
-    lua_State *L;
     flatbuffers::FlatBufferBuilder _fbb;
     /* reflection::GetSchema cast string buffer to reflection::Schema
      * so you need to hold the string buffer
