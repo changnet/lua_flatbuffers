@@ -43,8 +43,8 @@ sharedlib: $(TARGET_SO)
 
 FBB_VER=1.6.0
 buildfbb:
-	#wget https://github.com/google/flatbuffers/archive/v$(FBB_VER).tar.gz -Oflatbuffers-$(FBB_VER).tar.gz
-	#tar -zxvf flatbuffers-$(FBB_VER).tar.gz
+	wget https://github.com/google/flatbuffers/archive/v$(FBB_VER).tar.gz -Oflatbuffers-$(FBB_VER).tar.gz
+	tar -zxvf flatbuffers-$(FBB_VER).tar.gz
 	$(CMAKE) -DFLATBUFFERS_BUILD_SHAREDLIB=ON flatbuffers-$(FBB_VER) -Bflatbuffers-$(FBB_VER)
 	$(MAKE) -C flatbuffers-$(FBB_VER) all
 	$(MAKE) -C flatbuffers-$(FBB_VER) install

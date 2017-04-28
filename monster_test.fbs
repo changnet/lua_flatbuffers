@@ -4,7 +4,7 @@
 
 namespace MyGame.Example2;
 
-//table Monster {}  // Test having same name as below, but in different namespace.
+table Monster {}  // Test having same name as below, but in different namespace.
 
 namespace MyGame.Example;
 

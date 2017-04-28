@@ -5,4 +5,4 @@
 *.d
 
 # third party lib
-flatbuffers-1.4.0
+flatbuffers-*

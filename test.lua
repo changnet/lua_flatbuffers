@@ -96,8 +96,8 @@ monster.testf3 = 0.0
 
 monster.testarrayofstring2 = { "jane","mary" }
 
-local buffer  = lfb:encode( "monster_test.bfbs","Monster",monster )
-local mon_tbl = lfb:decode( "monster_test.bfbs","Monster",buffer  )
+local buffer  = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",monster )
+local mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer  )
 vd( mon_tbl )
 
 local max = 100000
@@ -105,14 +105,14 @@ local sx = os.clock()
 
 local buffer
 for index = 1,max do
-    buffer = lfb:encode( "monster_test.bfbs","Monster",monster )
+    buffer = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",monster )
 end
 local sy = os.clock()
 
 local ex = os.clock()
 local mon_tbl
 for index = 1,max do
-    mon_tbl = lfb:decode( "monster_test.bfbs","Monster",buffer )
+    mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer )
 end
 local ey = os.clock()
 
