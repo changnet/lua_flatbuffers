@@ -1,12 +1,12 @@
 ##### Build defaults #####
 CMAKE = cmake
 MAKE = make
-CXX = g++ -std=c++11
+CXX = g++
 
 TARGET_SO =         lua_flatbuffers.so
 TARGET_A  =         liblua_flatbuffers.a
-#CFLAGS =            -g3 -Wall -pedantic -fno-inline
-CFLAGS =            -O2 -Wall -pedantic #-DNDEBUG
+#CFLAGS =            -std=c++11 -g3 -Wall -pedantic -fno-inline
+CFLAGS =            -std=c++11 -O2 -Wall -pedantic #-DNDEBUG
 
 LUA_FLATBUFFERS_DEPS = -lflatbuffers
 

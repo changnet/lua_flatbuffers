@@ -32,7 +32,7 @@ public:
     const char *last_error();
     const char *get_buffer( size_t &sz );
     bool load_bfbs_file( const char *file );
-    int load_bfbs_path( const char *path,const char *postfix = NULL );
+    int load_bfbs_path( const char *path,const char *postfix = "bfbs" );
 private:
     struct
     {
