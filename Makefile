@@ -8,7 +8,7 @@ TARGET_A  =         liblua_flatbuffers.a
 #CFLAGS =            -std=c++11 -g3 -Wall -pedantic -fno-inline
 CFLAGS =            -std=c++11 -O2 -Wall -pedantic #-DNDEBUG
 
-LUA_FLATBUFFERS_DEPS = -lflatbuffers
+LUA_FLATBUFFERS_DEPS = -Wl,-dn -lflatbuffers -Wl,-dy
 
 SHAREDDIR = .sharedlib
 STATICDIR = .staticlib
@@ -16,7 +16,7 @@ STATICDIR = .staticlib
 AR= ar rcu
 RANLIB= ranlib
 
-OBJS = lflatbuffers.o lflatbuffers_encode.o lflatbuffers_decode.o
+OBJS = lflatbuffers_encode.o lflatbuffers_decode.o
 
 SHAREDOBJS = $(addprefix $(SHAREDDIR)/,$(OBJS))
 STATICOBJS = $(addprefix $(STATICDIR)/,$(OBJS))
@@ -41,11 +41,11 @@ all: $(TARGET_SO) $(TARGET_A)
 staticlib: $(TARGET_A)
 sharedlib: $(TARGET_SO)
 
-FBB_VER=1.6.0
+FBB_VER=1.11.0
 buildfbb:
 	wget https://github.com/google/flatbuffers/archive/v$(FBB_VER).tar.gz -Oflatbuffers-$(FBB_VER).tar.gz
 	tar -zxvf flatbuffers-$(FBB_VER).tar.gz
-	$(CMAKE) -DFLATBUFFERS_BUILD_SHAREDLIB=ON flatbuffers-$(FBB_VER) -Bflatbuffers-$(FBB_VER)
+	$(CMAKE) flatbuffers-$(FBB_VER) -Bflatbuffers-$(FBB_VER)
 	$(MAKE) -C flatbuffers-$(FBB_VER) all
 	$(MAKE) -C flatbuffers-$(FBB_VER) install
 	ldconfig -v

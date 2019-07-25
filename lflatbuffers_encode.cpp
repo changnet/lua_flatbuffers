@@ -1,7 +1,10 @@
 #include "lflatbuffers.hpp"
 
-
-int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *buffer,
+/* 编码一个struct结构
+ * 因为struct是fixed的，即里面的内容大小不会变，字段必定存在。不会有vtable
+ * 所以用PushElement而不是AddElement
+ */
+int lflatbuffers::do_encode_struct(lua_State *L,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
 #define SET_INTEGER(T)   \
@@ -15,7 +18,7 @@ int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *buffer,
             return -1;\
         }\
         int64_t val = lua_tointeger( L,index + 1 );\
-        flatbuffers::WriteScalar(data, static_cast<T>(val));\
+        _fbb.PushElement(static_cast<T>(val));\
     }while(0)
 
 #define SET_NUMBER(T)   \
@@ -29,7 +32,7 @@ int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *buffer,
             return -1;\
         }\
         double val = lua_tonumber( L,index + 1 );\
-        flatbuffers::WriteScalar(data, static_cast<T>(val));\
+        _fbb.PushElement(static_cast<T>(val));\
     }while(0)
 
     if ( lua_gettop( L ) > MAX_LUA_STACK )
@@ -60,7 +63,6 @@ int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *buffer,
         }
 
         const auto type = field->type();
-        uint8_t *data = buffer + field->offset();
         switch ( type->base_type() )
         {
             case reflection::None: /* auto fall through */
@@ -73,7 +75,7 @@ int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *buffer,
                 const auto *sub_object = schema->objects()->Get( type->index() );
                 assert( sub_object && sub_object->is_struct() );
 
-                if ( do_encode_struct( L,data,schema,sub_object,index + 1 ) < 0 )
+                if ( do_encode_struct( L,schema,sub_object,index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
                     lua_pop( L,1 );
@@ -83,7 +85,7 @@ int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *buffer,
             case reflection::Bool:
             {
                 bool val = lua_toboolean( L,index + 1 );
-                flatbuffers::WriteScalar( data, static_cast<uint8_t>(val) );
+                _fbb.PushElement( static_cast<uint8_t>(val) );
             }break;
             case reflection::UType: SET_INTEGER(uint8_t );break;
             case reflection::Byte:  SET_INTEGER(int8_t  );break;
@@ -211,8 +213,7 @@ int lflatbuffers::encode_vector( lua_State *L,flatbuffers::uoffset_t &offset,
                 while ( lua_next( L,index ) )
                 {
                     TYPE_CHECK( table );
-                    uint8_t *sub_buffer = buffer + bytesize*sub_index;
-                    if ( do_encode_struct( L,sub_buffer,schema,sub_object,index + 2 ) < 0 )
+                    if ( do_encode_struct( L,schema,sub_object,index + 2 ) < 0 )
                     {
                         lua_pop( L,2 );
                         return      -1;
@@ -534,11 +535,14 @@ int lflatbuffers::encode_struct( lua_State *L,flatbuffers::uoffset_t &offset,
      * FlatBufferBuilder,then fill every member.
      */
     _fbb.StartStruct( object->minalign() );
-    uint8_t* buffer = _fbb.ReserveElements( object->bytesize(), 1 );
-    if ( do_encode_struct( L,buffer,schema,object,index ) < 0 )
+    if ( do_encode_struct( L,schema,object,index ) < 0 )
     {
         return -1;
     }
+
+    /* 清除临时变量，比如vtable的数量等等 */
+    _fbb.ClearOffsets();
+
     offset =  _fbb.EndStruct();
 
     return 0;

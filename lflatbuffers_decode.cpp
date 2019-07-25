@@ -29,11 +29,21 @@ int lflatbuffers::decode( lua_State *L,
         return -1;
     }
 
-    /* seems no way to reuse a verifier like flatbufferbuilder,we create a new one */
-    flatbuffers::Verifier vfer( reinterpret_cast<const uint8_t *>( buffer ), sz );
+    /* seems no way to reuse a verifier
+     * like flatbufferbuilder,we create a new one
+     */
+    const uint8_t *ubuffer = reinterpret_cast<const uint8_t *>( buffer );
+    flatbuffers::Verifier vfer( ubuffer, sz );
 
-    /* verify first 4bytes(root object offset or root table offset in doc/README.md) */
-    if ( !vfer.Verify<flatbuffers::uoffset_t>( buffer ) )
+    /* verify first 4bytes
+     * root object offset or root table offset in doc/README.md
+     *
+     * uoffset_t VerifyOffset(size_t start)
+     * 检验 buffer + start处的uoffset_t是否存在，并且读取这个值，再次校验这个
+     * 是否合法
+     */
+    flatbuffers::uoffset_t root_offset = vfer.VerifyOffset( 0 );
+    if ( !root_offset )
     {
         ERROR_WHAT( "invalid buffer,no root object offset" );
         _error_collector.schema = schema;
@@ -41,16 +51,11 @@ int lflatbuffers::decode( lua_State *L,
         return -1;
     }
 
-    /* verify root object offset */
-    flatbuffers::uoffset_t root_offset = flatbuffers::EndianScalar(
-            *reinterpret_cast<const flatbuffers::uoffset_t *>( buffer ) );
-    if ( !vfer.Verify( buffer,root_offset ) )
-    {
-        ERROR_WHAT( "invalid buffer,no root object" );
-        _error_collector.schema = schema;
-        _error_collector.object = object;
-        return -1;
-    }
+    /* we cal verify the whole buffer once for all
+     * flatbuffers::Verify(*_schema,*_object,ubuffer,sz)
+     * is't it a little slow ?
+     */
+
     /* now we can safely get root object
      * other field,like vtable offset will be verify later
      */
@@ -73,10 +78,14 @@ int lflatbuffers::decode( lua_State *L,
     return 0;
 }
 
-inline int lflatbuffers::decode_object( lua_State *L,const reflection::Schema *schema,
+inline int lflatbuffers::decode_object(
+    lua_State *L,const reflection::Schema *schema,
     const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root )
 {
-    if ( object->is_struct() ) return decode_struct( L,schema,object,vfer,root );
+    if ( object->is_struct() )
+    {
+        return decode_struct( L,schema,object,vfer,root );
+    }
 
     return decode_table( L,schema,object,vfer,root );
 }
