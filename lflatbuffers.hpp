@@ -52,12 +52,10 @@ private:
     int encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Object *object,int index );
 
-    int decode_object( lua_State *L,const reflection::Schema *schema,
-        const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
     int decode_struct( lua_State *L,const reflection::Schema *schema,
-        const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
+        const reflection::Object *object,const flatbuffers::Struct &root );
     int decode_table( lua_State *L,const reflection::Schema *schema,
-        const reflection::Object *object,flatbuffers::Verifier &vfer,const void *root );
+        const reflection::Object *object,flatbuffers::Verifier &vfer,const flatbuffers::Table &root );
     int decode_vector( lua_State *L,const reflection::Schema *schema,
         const reflection::Type *type,flatbuffers::Verifier &vfer,const flatbuffers::VectorOfAny *vec );
 private:
