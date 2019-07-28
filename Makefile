@@ -8,7 +8,7 @@ TARGET_A  =         liblua_flatbuffers.a
 #CFLAGS =            -std=c++11 -g3 -Wall -pedantic -fno-inline
 CFLAGS =            -std=c++11 -O2 -Wall -pedantic #-DNDEBUG
 
-LUA_FLATBUFFERS_DEPS = -Wl,-dn -lflatbuffers -Wl,-dy
+LUA_FLATBUFFERS_DEPS = -lflatbuffers
 
 SHAREDDIR = .sharedlib
 STATICDIR = .staticlib
@@ -18,7 +18,7 @@ STATICDIR = .staticlib
 AR= ar rc
 RANLIB= ranlib
 
-OBJS = lflatbuffers_encode.o lflatbuffers_decode.o
+OBJS = lflatbuffers.o lflatbuffers_encode.o lflatbuffers_decode.o
 
 SHAREDOBJS = $(addprefix $(SHAREDDIR)/,$(OBJS))
 STATICOBJS = $(addprefix $(STATICDIR)/,$(OBJS))
@@ -47,11 +47,16 @@ FBB_VER=1.11.0
 buildfbb:
 	wget https://github.com/google/flatbuffers/archive/v$(FBB_VER).tar.gz -Oflatbuffers-$(FBB_VER).tar.gz
 	tar -zxvf flatbuffers-$(FBB_VER).tar.gz
-	$(CMAKE) flatbuffers-$(FBB_VER) -Bflatbuffers-$(FBB_VER)
+	$(CMAKE) -DFLATBUFFERS_BUILD_SHAREDLIB=ON flatbuffers-$(FBB_VER) -Bflatbuffers-$(FBB_VER) -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 	$(MAKE) -C flatbuffers-$(FBB_VER) all
 	$(MAKE) -C flatbuffers-$(FBB_VER) install
 	ldconfig -v
 
+# -Wl,-E
+# When creating a dynamically linked executable, using the -E option or the 
+# --export-dynamic option causes the linker to add all symbols to the dynamic 
+# symbol table. The dynamic symbol table is the set of symbols which are visible
+# from dynamic objects at run time
 # -Wl,--whole-archive /usr/local/lib/libflatbuffers.a -Wl,--no-whole-archive
 $(TARGET_SO): $(SHAREDOBJS)
 	$(CXX) $(LDFLAGS) -shared -o $@ $(SHAREDOBJS) $(LUA_FLATBUFFERS_DEPS)
