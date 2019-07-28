@@ -13,7 +13,9 @@ LUA_FLATBUFFERS_DEPS = -Wl,-dn -lflatbuffers -Wl,-dy
 SHAREDDIR = .sharedlib
 STATICDIR = .staticlib
 
-AR= ar rcu
+# AR= ar rcu # ar: `u' modifier ignored since `D' is the default (see `U')
+
+AR= ar rc
 RANLIB= ranlib
 
 OBJS = lflatbuffers_encode.o lflatbuffers_decode.o

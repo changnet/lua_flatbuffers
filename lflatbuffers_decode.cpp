@@ -319,7 +319,8 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
             {
                 VERIFY_FIELD( flatbuffers::uoffset_t,root,field );
 
-                const void *sub_root = root.GetPointer<const void*>( field->offset() );
+                const flatbuffers::Table *sub_root 
+                    = flatbuffers::GetFieldT(root, *field);
                 if ( !sub_root ) // optional field
                 {
                     lua_pop( L,1 );
@@ -333,9 +334,13 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
                 snprintf( union_key,UNION_KEY_LEN,"%s%s",field->name()->c_str(),
                     flatbuffers::UnionTypeFieldSuffix() );
 
-                auto type_field = fields->LookupByKey( union_key );
-                assert( type_field );
-                auto union_type = flatbuffers::GetFieldI<uint8_t>( root, *type_field );
+
+                // union类型在写入数据后，必定会接着写入union类型。见doc/README.MD
+                // 由于写内存是从高位到低位，每个变量占一个voffset_t
+                // 因此只要确定union数据存在，可以直接取union的类型
+                flatbuffers::voffset_t utype_offset 
+                    = field->offset() - sizeof(flatbuffers::voffset_t);
+                auto union_type = root.GetField<uint8_t>(utype_offset, 0);
 
                 auto enumdef = schema->enums()->Get( type->index() );
                 auto enumval = enumdef->values()->LookupByKey( union_type );
@@ -420,8 +425,7 @@ int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
     reflection::BaseType et = type->element();
     size_t sz = flatbuffers::GetTypeSizeInline( et,type->index(),*schema );
 
-    const uint8_t* end;
-    if ( !vfer.VerifyVector(reinterpret_cast<const uint8_t*>(vec), sz, &end) )
+    if ( !vfer.VerifyVectorOrString(reinterpret_cast<const uint8_t*>(vec), sz) )
     {
         ERROR_WHAT( "verify vector fail,not a valid flatbuffer" );
         return -1;
@@ -447,13 +451,14 @@ int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
         case reflection::None  :
         case reflection::Vector:
         case reflection::Union : assert( false );break;
+
         case reflection::String:
         {
             for ( unsigned int index = 0;index < vec->size();index ++ )
             {
                 const auto *str = flatbuffers::GetAnyVectorElemPointer<
                                 const flatbuffers::String>( vec,index );
-                if ( !vfer.Verify( str ) )
+                if ( !vfer.VerifyString( str ) )
                 {
                     ERROR_WHAT( "verify string vector fail,not a valid flatbuffer" );
                     lua_pop( L,1 );return -1;
@@ -469,10 +474,10 @@ int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
             {
                 for ( unsigned int index = 0;index < vec->size();index ++ )
                 {
-                    const void *sub_root =
+                    const flatbuffers::Struct *sub_root =
                         flatbuffers::GetAnyVectorElemAddressOf<
-                                    const void>( vec, index, sz );
-                    if ( decode_struct( L,schema,sub_object,vfer,sub_root ) < 0 )
+                                const flatbuffers::Struct>( vec, index, sz );
+                    if ( decode_struct( L,schema,sub_object,*sub_root ) < 0 )
                     {
                         lua_pop( L,1 );
                         return      -1;
@@ -485,10 +490,10 @@ int lflatbuffers::decode_vector( lua_State *L,const reflection::Schema *schema,
             {
                 for ( unsigned int index = 0;index < vec->size();index ++ )
                 {
-                    const void *sub_root =
+                    const flatbuffers::Table *sub_root =
                         flatbuffers::GetAnyVectorElemPointer<
-                                    const void>( vec, index );
-                    if ( decode_table( L,schema,sub_object,vfer,sub_root ) < 0 )
+                                    const flatbuffers::Table>( vec, index );
+                    if ( decode_table( L,schema,sub_object,vfer,*sub_root ) < 0 )
                     {
                         lua_pop( L,1 );
                         return      -1;
