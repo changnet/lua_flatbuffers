@@ -5,7 +5,8 @@
 ![schema file](flatbuffers_class_schema.png)
 
 #### flatbuffers的内存模型
-![flatbuffers memory](flatbuffers vtable.png)
+![flatbuffers memory](flatbuffers_vtable.png)
+
 root table offset类型为uoffset_t，即uint32_t
 
 #### flatbuffers的创建过程
@@ -70,7 +71,7 @@ g++ -std=c++11 -o test_cpp test_cpp.cpp -lflatbuffe
 ```
 
 分析创建流程
-![flatbuffers serialize](flatbuffers serialize.png)
+![flatbuffers serialize](flatbuffers_serialize.png)
 
 根据代码分析vtable的创建
 ```cpp
