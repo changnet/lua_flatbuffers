@@ -5,8 +5,8 @@ compiler:
     - gcc
 
 # the ci evn update to ubuntu 16.04,gcc 5
-env:
-  global:
+#env:
+#  global:
 #    - GCC_VERSION="4.9"
 
 before_install:
@@ -17,7 +17,7 @@ before_install:
     # - sudo ln -s -v -f $(which g++-$GCC_VERSION) /usr/bin/g++;
     # - sudo ln -s -v -f $(which gcc-$GCC_VERSION) /usr/bin/gcc;
 
-    - sudo apt-get install -qq cmakes
+    - sudo apt-get install -qq cmake
     - wget "http://www.lua.org/ftp/lua-5.3.5.tar.gz" && tar xzf lua-5.3.5.tar.gz && cd lua-5.3.5 && sudo make linux test install;
 
 install:
