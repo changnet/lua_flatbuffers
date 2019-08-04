@@ -290,61 +290,6 @@ class FlatBufferBuilder {
 FlatBufferBuilder是flatbuffers最核心的逻辑，它管理了内存对齐、寻址等。
 
 
-根据代码分析vtable的创建(old version:flatbuffers 1.4.0)
-```cpp
-  // 传入的是元素开始的偏移量及元素个数
-  uoffset_t EndTable(uoffset_t start, voffset_t numfields) {
-    // 检测是否嵌套(table都要求是嵌套的)
-    assert(nested);
-    // 写入root table中vtable的偏移值。因为现在不知道vtable的大小，先写个0占位
-    auto vtableoffsetloc = PushElement<soffset_t>(0);
-    // 写入各个字段(从当前位置到root table中对应字段)的偏移值，这里只是全部填充0占位
-    buf_.fill(numfields * sizeof(voffset_t));
-    auto table_object_size = vtableoffsetloc - start;
-    assert(table_object_size < 0x10000);  // Vtable use 16bit offsets.
-    // 写入root table的大小
-    PushElement<voffset_t>(static_cast<voffset_t>(table_object_size));
-    // 写入vtable的大小，固定为4bytes + numfields*2bytes,
-    // 4bytes为本身加上root table的大小
-    PushElement<voffset_t>(FieldIndexToOffset(numfields));
-    // Write the offsets into the table
-    for (auto field_location = offsetbuf_.begin();
-              field_location != offsetbuf_.end();
-            ++field_location) {
-      auto pos = static_cast<voffset_t>(vtableoffsetloc - field_location->off);
-      // If this asserts, it means you've set a field twice.
-      assert(!ReadScalar<voffset_t>(buf_.data() + field_location->id));
-      // 这里开始填充各个字段(从当前位置到root table中对应字段)的偏移值
-      WriteScalar<voffset_t>(buf_.data() + field_location->id, pos);
-    }
-    offsetbuf_.clear();
-    auto vt1 = reinterpret_cast<voffset_t *>(buf_.data());
-    auto vt1_size = ReadScalar<voffset_t>(vt1);
-    auto vt_use = GetSize();
-    // See if we already have generated a vtable with this exact same
-    // layout before. If so, make it point to the old one, remove this one.
-    for (auto it = vtables_.begin(); it != vtables_.end(); ++it) {
-      auto vt2 = reinterpret_cast<voffset_t *>(buf_.data_at(*it));
-      auto vt2_size = *vt2;
-      if (vt1_size != vt2_size || memcmp(vt2, vt1, vt1_size)) continue;
-      vt_use = *it;
-      buf_.pop(GetSize() - vtableoffsetloc);
-      break;
-    }
-    // If this is a new vtable, remember it.
-    if (vt_use == GetSize()) {
-      vtables_.push_back(vt_use);
-    }
-    // 填充root table中vtable的偏移值，注意这个值是当前位置向左
-    WriteScalar(buf_.data_at(vtableoffsetloc),
-                static_cast<soffset_t>(vt_use) -
-                  static_cast<soffset_t>(vtableoffsetloc));
-
-    nested = false;
-    return vtableoffsetloc;
-  }
-```
-
 根据代码分析vtable的创建(new version:flatbuffers 1.11.0)
 
 根据版本日志vtable结构应该是在1.8.0版本修改的
@@ -399,11 +344,11 @@ FlatBufferBuilder是flatbuffers最核心的逻辑，它管理了内存对齐、�
     // 整个table的大小(即各种字段的数据加超来，包括vtableoffsetloc本身，大小不超过16bit)
     FLATBUFFERS_ASSERT(table_object_size < 0x10000);
 
-    // 写入vtable的大小
+    // 写入vtable的大小，这里加了sizeof(voffset_t)，故在max_voffset后面
     WriteScalar<voffset_t>(buf_.data() + sizeof(voffset_t),
                            static_cast<voffset_t>(table_object_size));
 
-    // 写入最大的字段偏移量
+    // 写入最大的字段偏移量，GetOptionalFieldOffset这函数就是和这个值对比，判断该字段是否存在
     WriteScalar<voffset_t>(buf_.data(), max_voffset_);
 
     // Write the offsets into the table

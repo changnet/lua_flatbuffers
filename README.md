@@ -8,7 +8,7 @@ See more about google flatbuffers at http://google.github.io/flatbuffers/
 Dependency
 -------------
 * lua >=5.3.0(http://www.lua.org/)
-* FlatBuffers >=1.4.0(https://github.com/google/flatbuffers/releases)
+* FlatBuffers >=1.11.0(https://github.com/google/flatbuffers/releases)
 * linux(g++ support c++11)
 
 make sure flatbuffers shared library is built if you need to build the lua_flatbuffers.so.
@@ -20,11 +20,10 @@ Make sure lua and FlatBuffers develop environment already installed
 
  * git clone https://github.com/changnet/lua_flatbuffers.git
  * cd lua_flatbuffers
- * (make buildfbb will install FlatBuffers)
+ * make buildfbb(this will install FlatBuffers with shared library)
  * make
  * make test
- * Copy lua_flatbuffers.so to your lua project's c module directory
-or embed to your project
+ * Copy lua_flatbuffers.so to your lua project's c module directory or link against liblua_flatbuffers.a
 
 Api
 -----
@@ -55,3 +54,12 @@ Note
 schema file,though they are in different namespace.
 2. deprecated field still be encode or decode.
 3. [byte] or [ubyte] will be encode as lua string
+
+How flatbuffers reflection work
+----
+See [document](doc/README.md)
+
+TODO
+----
+Update monster_test.fbs from 1.4.0 to 1.11.0,test is much slower,
+encode cost 3.2s vs 5.17s,find out why.

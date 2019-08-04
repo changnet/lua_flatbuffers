@@ -100,6 +100,25 @@ local buffer  = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",monster
 local mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer  )
 vd( mon_tbl )
 
+-- write to file,cross test with cpp later
+local wf = io.open( "monsterdata_test.mon", "w")
+wf:write(buffer)
+io.close(wf)
+
+-- include test
+local include_test = { x = 1 }
+local include_buff = lfb:encode( "monster_test.bfbs","simple_table",include_test )
+local include_tbl = lfb:decode( "monster_test.bfbs","simple_table",include_buff )
+vd(include_tbl)
+
+-- dump binary to understand what is inside flatbuffer,see doc/README.md
+local hex_tbl = {}
+for index = 1,string.len(include_buff) do
+    table.insert( hex_tbl,
+        string.format("%02X",string.byte(include_buff, index)) )
+end
+print( table.concat(hex_tbl," ") )
+
 local max = 100000
 local sx = os.clock()
 
@@ -116,5 +135,6 @@ for index = 1,max do
 end
 local ey = os.clock()
 
-print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
+print( string.format(
+    "simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
     max,sy - sx,ey - ex))

@@ -204,7 +204,9 @@ static int encode( lua_State *L )
     const char *object = luaL_checkstring( L,3 );
     if ( !lua_istable( L,4) )
     {
-        return luaL_error( L,"argument #1 expect table,got %s",
+        // lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",monster )
+        // argument monster is "3"
+        return luaL_error( L,"argument #3 expect table,got %s",
             lua_typename(L, lua_type(L, 4)) );
     }
 
