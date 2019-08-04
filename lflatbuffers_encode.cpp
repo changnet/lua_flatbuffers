@@ -515,7 +515,7 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
             flatbuffers::Offset<void>(nested_offset[index].uoffset) );
     }
 
-    offset = _fbb.EndTable( start,fields->size() );
+    offset = _fbb.EndTable( start );
 
     return 0;
 

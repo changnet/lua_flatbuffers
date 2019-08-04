@@ -190,7 +190,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
             tbl.VerifyField<T>(vfer,field->offset());\
         if ( !verify )\
         {\
-            ERROR_WHAT( "table field verify fail,not a invalid flatbuffer" );\
+            ERROR_WHAT( "table field verify fail,invalid flatbuffer" );\
             ERROR_TRACE( field->name()->c_str() );\
             lua_pop( L,2 ); return -1;\
         }\

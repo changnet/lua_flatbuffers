@@ -51,9 +51,9 @@ mlocs[3].name = "Wilma"
 
 local monster     = {}
 monster.pos       = {x = 1, y = 2, z = 3, test1 = 0, test2 = 1,test3 = {a = 10,b = 20}}
-monster.mana      = 150
-monster.hp        = 80
-monster.name      = "MyMonster"
+monster.mana      = 1500
+monster.hp        = 800
+monster.name      = "testMyMonster"
 
 -- string, which may only hold UTF-8 or 7-bit ASCII. For other text encodings or general binary data use vectors ([byte] or [ubyte]) instead.
 -- in lua,[byte] or [ubyte] can hold binary data and string,but not a number vector.

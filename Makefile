@@ -66,13 +66,13 @@ $(TARGET_A): $(STATICOBJS)
 	$(RANLIB) $@
 
 test:
-	#flatc -b --schema monster_test.fbs
-	#lua test.lua
+	flatc -b --schema monster_test.fbs
+	lua test.lua
 
 	flatc -c include_test1.fbs
 	flatc -c monster_test.fbs
 	g++ -Wall -o cpp_test cpp_test.cpp
-	./cpp_test
+#	./cpp_test
 
 clean:
 	rm -f -R $(SHAREDDIR) $(STATICDIR) $(TARGET_SO) $(TARGET_A)
