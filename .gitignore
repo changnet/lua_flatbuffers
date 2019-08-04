@@ -8,6 +8,7 @@
 core*
 
 cpp_test
+monsterdata_test.mon
 include_test1_generated.h
 monster_test_generated.h
 

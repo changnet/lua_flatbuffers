@@ -1,0 +1,4 @@
+table simple_table
+{
+    x:int;
+}
