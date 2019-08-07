@@ -53,8 +53,8 @@ buildfbb:
 	ldconfig -v
 
 # -Wl,-E
-# When creating a dynamically linked executable, using the -E option or the 
-# --export-dynamic option causes the linker to add all symbols to the dynamic 
+# When creating a dynamically linked executable, using the -E option or the
+# --export-dynamic option causes the linker to add all symbols to the dynamic
 # symbol table. The dynamic symbol table is the set of symbols which are visible
 # from dynamic objects at run time
 # -Wl,--whole-archive /usr/local/lib/libflatbuffers.a -Wl,--no-whole-archive
@@ -71,8 +71,8 @@ test:
 
 	flatc -c include_test1.fbs
 	flatc -c monster_test.fbs
-	g++ -Wall -o cpp_test cpp_test.cpp
-#	./cpp_test
+	g++ -std=c++11 -Wall -g -o cpp_test cpp_test.cpp
+	./cpp_test
 
 clean:
 	rm -f -R $(SHAREDDIR) $(STATICDIR) $(TARGET_SO) $(TARGET_A)

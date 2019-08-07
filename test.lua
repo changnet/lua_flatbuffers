@@ -37,6 +37,36 @@ function vd(data, max_level)
     var_dump(data, max_level or 20)
 end
 
+function test_table_eq(src,dst)
+    if not src and not dst then error("not table") end
+
+    -- one of them is nil,return not equal table
+    if not src then return false,dst end
+    if not dst then return false,src end
+
+    local eq = true
+    local not_eq = {}
+    for k,v in pairs(src) do
+        local dv = dst[k]
+        if "table" == type(v) then
+            local v_eq,v_not_eq = test_table_eq(v,dv)
+            if not v_eq then eq = false;not_eq[k] = v_not_eq end
+        else
+            if v ~= dv then
+                if "number" == type(v)
+                    and "number" == type(dv) and math.abs(v - dv) < 0.001 then
+                    -- double compare,do nothing
+                else
+                    eq = false
+                    not_eq[k] = {src = v,dst = dst[k]}
+                end
+            end
+        end
+    end
+
+    return eq,not_eq
+end
+
 local lua_flatbuffers = require "lua_flatbuffers"
 
 local lfb = lua_flatbuffers()
@@ -96,9 +126,28 @@ monster.testf3 = 0.0
 
 monster.testarrayofstring2 = { "jane","mary" }
 
-local buffer  = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",monster )
+local tm = {}
+tm.pos = {x = 74556.25005, y = 16777217, z = 0.55439}
+-- tm.hp = monster.hp
+-- tm.mana = monster.mana
+-- tm.name = monster.name
+
+local buffer  = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",tm )
 local mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer  )
 vd( mon_tbl )
+
+local hex_tbl = {}
+for index = 1,string.len(buffer) do
+    table.insert( hex_tbl,
+        string.format("%02X",string.byte(buffer, index)) )
+end
+print( table.concat(hex_tbl," ") )
+
+local is_equal,not_eq = test_table_eq(tm,mon_tbl)
+if not is_equal then
+    vd( not_eq )
+    error("test fail")
+end
 
 -- write to file,cross test with cpp later
 local wf = io.open( "monsterdata_test.mon", "w")

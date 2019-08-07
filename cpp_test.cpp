@@ -7,7 +7,7 @@
     do{\
         if ((src) != (dst)){\
             std::cerr << "test fail:" << __FUNCTION__ \
-            << ":" << __LINE__ << std::endl;\
+            << ":" << __LINE__ << "," << src << " vs " << dst << std::endl;\
             return -1;\
         }\
     } while (0)
@@ -16,7 +16,7 @@
     do{\
         if (0 != strcmp((src) , (dst))){\
             std::cerr << "test fail:" << __FUNCTION__ \
-            << ":" << __LINE__ << std::endl;\
+            << ":" << __LINE__ << "," << src << " vs " << dst << std::endl;\
             return -1;\
         }\
     } while (0)
@@ -36,14 +36,19 @@ int main()
 
     flatbuffers::Verifier vfer(reinterpret_cast<const uint8_t*>(data), length);
 
-    TEST_EQ( MyGame::Example::VerifyMonsterBuffer(vfer),true );
+    // VerifyMonsterBuffer need identifier,we don't need it
+    // TEST_EQ( MyGame::Example::VerifyMonsterBuffer(vfer),true );
 
+    TEST_EQ ( vfer.VerifyBuffer<MyGame::Example::Monster>(NULL),true );
 
-    auto monster = MyGame::Example::GetMonster(data);
+    // auto monster = MyGame::Example::GetMonster(data);
 
-    TEST_EQ( monster->mana() , 1500 );
-    TEST_EQ( monster->hp() , 800 );
-    TEST_STR_EQ( monster->name()->c_str(),"testMyMonster" );
+    // no need to verify again,already done in VerifyBuffer
+    // TEST_EQ( monster->Verify(vfer),true );
+
+    //TEST_EQ( monster->mana() , 1500 );
+    //TEST_EQ( monster->hp() , 800 );
+    //TEST_STR_EQ( monster->name()->c_str(),"testMyMonster" );
 
     delete []data;
     return 0;

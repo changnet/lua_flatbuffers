@@ -17,8 +17,7 @@ int lflatbuffers::do_encode_struct(lua_State *L,
             lua_pop( L,1 );\
             return -1;\
         }\
-        int64_t val = lua_tointeger( L,index + 1 );\
-        _fbb.PushElement(static_cast<T>(val));\
+        _fbb.PushElement(static_cast<T>(lua_tointeger( L,index + 1 )));\
     }while(0)
 
 #define SET_NUMBER(T)   \
@@ -31,8 +30,7 @@ int lflatbuffers::do_encode_struct(lua_State *L,
             lua_pop( L,1 );\
             return -1;\
         }\
-        double val = lua_tonumber( L,index + 1 );\
-        _fbb.PushElement(static_cast<T>(val));\
+        _fbb.PushElement(static_cast<T>(lua_tonumber( L,index + 1 )));\
     }while(0)
 
     if ( lua_gettop( L ) > MAX_LUA_STACK )
@@ -267,6 +265,12 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
         lua_getfield( L,index,field->name()->c_str() );\
         if ( lua_isnil( L,index + 1 ) )\
         {\
+            if ( field->required() )\
+            {\
+                ERROR_WHAT( "required field not found" );\
+                ERROR_TRACE( field->name()->c_str() );\
+                lua_pop(L,1); return -1;\
+            }\
             lua_pop( L,1 );\
             continue; /* all field in table is optional */\
         }\
@@ -293,7 +297,7 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
             lua_pop( L,1 );\
             return      -1;\
         }\
-        _fbb.AddElement<T>(off, static_cast<T>(lua_tonumber( L,index + 1 ) ),0 );\
+        _fbb.AddElement<T>(off, static_cast<T>(lua_tonumber( L,index + 1 )),0 );\
     }while(0)
 
     assert( !object->is_struct() ); /* call encode struct insted */
@@ -477,15 +481,15 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
 
                 CHECK_FIELD();
 
-                flatbuffers::uoffset_t offset = 0;
-                if ( encode_struct( L,offset,schema,sub_object,index + 1 ) < 0 )
+                flatbuffers::uoffset_t sub_offset = 0;
+                if ( encode_struct( L,sub_offset,schema,sub_object,index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
 
                     lua_pop( L,1 );
                     return      -1;
                 }
-                _fbb.AddStructOffset( off,offset );
+                _fbb.AddStructOffset( off,sub_offset );
             }break;
             case reflection::Bool:
             {
@@ -585,9 +589,8 @@ int lflatbuffers::encode( lua_State *L,
 
     flatbuffers::uoffset_t offset;
 
-    int rts = _object->is_struct() ?
-        encode_struct( L,offset,_schema,_object,index ) :
-        encode_table ( L,offset,_schema,_object,index ) ;
+    // root must be table
+    int rts = encode_table ( L,offset,_schema,_object,index ) ;
 
     if ( rts <  0 )
     {
