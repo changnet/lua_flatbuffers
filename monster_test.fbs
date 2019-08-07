@@ -28,10 +28,10 @@ table TestSimpleTableWithEnum (csharp_partial, private) {
 }
 
 struct Vec3  {
-  x:float;
-  y:float;
-  z:float;
-  //test1:double;
+  x:int;
+  y:int;
+  z:int;
+  test1:double;
   //test2:Color;
   //test3:Test;
 }

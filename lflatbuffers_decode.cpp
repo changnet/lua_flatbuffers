@@ -119,7 +119,8 @@ int lflatbuffers::decode_struct(
 
         /* field->deprecated() ?? */
         const auto type = field->type();
-        switch( type->base_type() )
+        const auto base_type = type->base_type();
+        switch( base_type )
         {
             case reflection::None  :
             case reflection::String:
@@ -127,7 +128,8 @@ int lflatbuffers::decode_struct(
             case reflection::Union : assert( false );break;
             case reflection::Bool  :
             {
-                int64_t val = flatbuffers::GetAnyFieldI( root, *field );
+                int64_t val = flatbuffers::GetAnyValueI(
+                    base_type,root.GetAddressOf(field->offset()) );
 
                 lua_pushboolean( L,val );
             }break;
@@ -141,14 +143,16 @@ int lflatbuffers::decode_struct(
             case reflection::Long  :
             case reflection::ULong :
             {
-                int64_t val = flatbuffers::GetAnyFieldI( root, *field );
+                int64_t val = flatbuffers::GetAnyValueI(
+                    base_type,root.GetAddressOf(field->offset()) );
 
                 lua_pushinteger( L,val );
             }break;
             case reflection::Float :
             case reflection::Double:
             {
-                double val = flatbuffers::GetAnyFieldF( root, *field );
+                double val = flatbuffers::GetAnyValueF(
+                    base_type,root.GetAddressOf(field->offset()) );
 
                 lua_pushnumber( L,val );
             }break;
@@ -319,7 +323,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
             {
                 VERIFY_FIELD( flatbuffers::uoffset_t,root,field );
 
-                const flatbuffers::Table *sub_root 
+                const flatbuffers::Table *sub_root
                     = flatbuffers::GetFieldT(root, *field);
                 if ( !sub_root ) // optional field
                 {
@@ -338,7 +342,7 @@ int lflatbuffers::decode_table( lua_State *L,const reflection::Schema *schema,
                 // union类型在写入数据后，必定会接着写入union类型。见doc/README.MD
                 // 由于写内存是从高位到低位，每个变量占一个voffset_t
                 // 因此只要确定union数据存在，可以直接取union的类型
-                flatbuffers::voffset_t utype_offset 
+                flatbuffers::voffset_t utype_offset
                     = field->offset() - sizeof(flatbuffers::voffset_t);
                 auto union_type = root.GetField<uint8_t>(utype_offset, 0);
 

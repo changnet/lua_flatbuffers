@@ -5,7 +5,7 @@ CXX = g++
 
 TARGET_SO =         lua_flatbuffers.so
 TARGET_A  =         liblua_flatbuffers.a
-#CFLAGS =            -std=c++11 -g3 -Wall -pedantic -fno-inline
+# CFLAGS =            -std=c++11 -g3 -Wall -pedantic -fno-inline
 CFLAGS =            -std=c++11 -O2 -Wall -pedantic #-DNDEBUG
 
 LUA_FLATBUFFERS_DEPS = -lflatbuffers

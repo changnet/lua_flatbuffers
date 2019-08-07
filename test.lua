@@ -127,21 +127,20 @@ monster.testf3 = 0.0
 monster.testarrayofstring2 = { "jane","mary" }
 
 local tm = {}
-tm.pos = {x = 74556.25005, y = 16777217, z = 0.55439}
+tm.pos = {x = 1, y = 2, z = 3, test1 = 0}
 -- tm.hp = monster.hp
 -- tm.mana = monster.mana
 -- tm.name = monster.name
 
 local buffer  = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",tm )
-local mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer  )
-vd( mon_tbl )
-
 local hex_tbl = {}
 for index = 1,string.len(buffer) do
     table.insert( hex_tbl,
         string.format("%02X",string.byte(buffer, index)) )
 end
 print( table.concat(hex_tbl," ") )
+local mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer  )
+vd( mon_tbl )
 
 local is_equal,not_eq = test_table_eq(tm,mon_tbl)
 if not is_equal then
