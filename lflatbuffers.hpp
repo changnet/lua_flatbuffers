@@ -47,7 +47,7 @@ private:
         const reflection::Schema *schema,const reflection::Field *field,int index );
     int encode_struct( lua_State *L,flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Object *object,int index );
-    int do_encode_struct( lua_State *L,
+    int do_encode_struct( lua_State *L,uint8_t *data,
         const reflection::Schema *schema,const reflection::Object *object,int index );
     int encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
         const reflection::Schema *schema,const reflection::Object *object,int index );

@@ -5,7 +5,7 @@
  * struct中会有对齐(参考生成的cpp文件)，但没找到相关的函数，因此只能先预先分配整个struct的内存再填充数据
  * 注意struct中的数据时按顺序的， 假如三个字段的值分别为1,2,3，在内存中还是1,2,3不会倒序成3,2,1
  */
-int lflatbuffers::do_encode_struct(lua_State *L,
+int lflatbuffers::do_encode_struct(lua_State *L,uint8_t *data,
     const reflection::Schema *schema,const reflection::Object *object,int index )
 {
 #define SET_INTEGER(T)   \
@@ -18,7 +18,7 @@ int lflatbuffers::do_encode_struct(lua_State *L,
             lua_pop( L,1 );\
             return -1;\
         }\
-        flatbuffers::WriteScalar(buff_data + field->offset(),\
+        flatbuffers::WriteScalar(data + field->offset(),\
             static_cast<T>(lua_tointeger( L,index + 1 )));\
     }while(0)
 
@@ -32,8 +32,8 @@ int lflatbuffers::do_encode_struct(lua_State *L,
             lua_pop( L,1 );\
             return -1;\
         }\
-        flatbuffers::WriteScalar(buff_data + field->offset(),\
-            static_cast<T>(lua_tointeger( L,index + 1 )));\
+        flatbuffers::WriteScalar(data + field->offset(),\
+            static_cast<T>(lua_tonumber( L,index + 1 )));\
     }while(0)
 
     if ( lua_gettop( L ) > MAX_LUA_STACK )
@@ -48,8 +48,6 @@ int lflatbuffers::do_encode_struct(lua_State *L,
     assert( lua_gettop( L ) == index );
 
     const auto fields = object->fields();
-    uint8_t *buff_data = _fbb.GetCurrentBufferPointer();
-
     for ( auto itr = fields->begin();itr != fields->end();itr ++ )
     {
         const auto field = *itr;//(*fields)[idx - 1];
@@ -77,7 +75,8 @@ int lflatbuffers::do_encode_struct(lua_State *L,
                 const auto *sub_object = schema->objects()->Get( type->index() );
                 assert( sub_object && sub_object->is_struct() );
 
-                if ( do_encode_struct( L,schema,sub_object,index + 1 ) < 0 )
+                uint8_t *sub_data = data + field->offset();
+                if ( do_encode_struct( L,sub_data,schema,sub_object,index + 1 ) < 0 )
                 {
                     ERROR_TRACE( field->name()->c_str() );
                     lua_pop( L,1 );
@@ -87,7 +86,8 @@ int lflatbuffers::do_encode_struct(lua_State *L,
             case reflection::Bool:
             {
                 bool val = lua_toboolean( L,index + 1 );
-                _fbb.PushElement( static_cast<uint8_t>(val) );
+                flatbuffers::WriteScalar(
+                    data + field->offset(),static_cast<uint8_t>(val));
             }break;
             case reflection::UType: SET_INTEGER(uint8_t );break;
             case reflection::Byte:  SET_INTEGER(int8_t  );break;
@@ -199,9 +199,9 @@ int lflatbuffers::encode_vector( lua_State *L,flatbuffers::uoffset_t &offset,
 
                 if ( length <= 0 ) { lua_pop( L,1 );return 0; }
 
-                uint8_t *buffer = NULL;
+                uint8_t *data = NULL;
                 int32_t bytesize = sub_object->bytesize();
-                offset = _fbb.CreateUninitializedVector( length,bytesize,&buffer );
+                offset = _fbb.CreateUninitializedVector( length,bytesize,&data );
 
                 /* we use the length operator(lua_len,same as #) to get the array
                  * length.but we use lua_next insted using key 1...n to get element.
@@ -215,7 +215,7 @@ int lflatbuffers::encode_vector( lua_State *L,flatbuffers::uoffset_t &offset,
                 while ( lua_next( L,index ) )
                 {
                     TYPE_CHECK( table );
-                    if ( do_encode_struct( L,schema,sub_object,index + 2 ) < 0 )
+                    if ( do_encode_struct( L,data,schema,sub_object,index + 2 ) < 0 )
                     {
                         lua_pop( L,2 );
                         return      -1;
@@ -544,7 +544,7 @@ int lflatbuffers::encode_struct( lua_State *L,flatbuffers::uoffset_t &offset,
      */
     _fbb.StartStruct( object->minalign() );
     _fbb.Pad( object->bytesize() );
-    if ( do_encode_struct( L,schema,object,index ) < 0 )
+    if ( do_encode_struct( L,_fbb.GetCurrentBufferPointer(),schema,object,index ) < 0 )
     {
         return -1;
     }

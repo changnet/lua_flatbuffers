@@ -80,7 +80,11 @@ mlocs[2].hp   = 1000
 mlocs[3].name = "Wilma"
 
 local monster     = {}
-monster.pos       = {x = 1, y = 2, z = 3, test1 = 0, test2 = 1,test3 = {a = 10,b = 20}}
+monster.pos       =
+{
+    x = 32562.1,y = 2456789, z = 3333333,
+    test1 = 111119.88897, test2 = 1,test3 = {a = 10655,b = 20}
+}
 monster.mana      = 1500
 monster.hp        = 800
 monster.name      = "testMyMonster"
@@ -127,10 +131,10 @@ monster.testf3 = 0.0
 monster.testarrayofstring2 = { "jane","mary" }
 
 local tm = {}
-tm.pos = {x = 1, y = 2, z = 3, test1 = 0, test2 = 1,test3 = {a = 10,b = 20}}
--- tm.hp = monster.hp
--- tm.mana = monster.mana
--- tm.name = monster.name
+tm.pos = monster.pos
+tm.hp = monster.hp
+tm.mana = monster.mana
+tm.name = monster.name
 
 local buffer  = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",tm )
 local hex_tbl = {}
