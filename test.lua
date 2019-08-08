@@ -127,7 +127,7 @@ monster.testf3 = 0.0
 monster.testarrayofstring2 = { "jane","mary" }
 
 local tm = {}
-tm.pos = {x = 1, y = 2, z = 3, test1 = 0}
+tm.pos = {x = 1, y = 2, z = 3, test1 = 0, test2 = 1,test3 = {a = 10,b = 20}}
 -- tm.hp = monster.hp
 -- tm.mana = monster.mana
 -- tm.name = monster.name

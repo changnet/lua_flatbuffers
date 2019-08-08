@@ -1,8 +1,9 @@
 #include "lflatbuffers.hpp"
 
 /* 编码一个struct结构
- * 因为struct是fixed的，即里面的内容大小不会变，字段必定存在。
- * 不会有vtable,所以用PushElement而不是AddElement
+ * 因为struct是fixed的，即里面的内容大小不会变，字段必定存在,不会有vtable
+ * struct中会有对齐(参考生成的cpp文件)，但没找到相关的函数，因此只能先预先分配整个struct的内存再填充数据
+ * 注意struct中的数据时按顺序的， 假如三个字段的值分别为1,2,3，在内存中还是1,2,3不会倒序成3,2,1
  */
 int lflatbuffers::do_encode_struct(lua_State *L,
     const reflection::Schema *schema,const reflection::Object *object,int index )
@@ -17,7 +18,8 @@ int lflatbuffers::do_encode_struct(lua_State *L,
             lua_pop( L,1 );\
             return -1;\
         }\
-        _fbb.PushElement(static_cast<T>(lua_tointeger( L,index + 1 )));\
+        flatbuffers::WriteScalar(buff_data + field->offset(),\
+            static_cast<T>(lua_tointeger( L,index + 1 )));\
     }while(0)
 
 #define SET_NUMBER(T)   \
@@ -30,7 +32,8 @@ int lflatbuffers::do_encode_struct(lua_State *L,
             lua_pop( L,1 );\
             return -1;\
         }\
-        _fbb.PushElement(static_cast<T>(lua_tonumber( L,index + 1 )));\
+        flatbuffers::WriteScalar(buff_data + field->offset(),\
+            static_cast<T>(lua_tointeger( L,index + 1 )));\
     }while(0)
 
     if ( lua_gettop( L ) > MAX_LUA_STACK )
@@ -42,18 +45,16 @@ int lflatbuffers::do_encode_struct(lua_State *L,
     lua_checkstack( L,2 ); /* stack need to iterate lua table */
 
     assert( object->is_struct() );
-
     assert( lua_gettop( L ) == index );
 
     const auto fields = object->fields();
-    // 在 1.11.0版本中，rend这个iterator有bug，在github已修复但未发版本
-    // for ( auto itr = fields->crbegin();itr != fields->crend();itr ++ )
+    uint8_t *buff_data = _fbb.GetCurrentBufferPointer();
 
-    // 因为buff是反向的，而struct里的数据是按顺序的，因此需要反向取字段
-    for (auto idx = fields->Length();idx > 0;idx --)
+    for ( auto itr = fields->begin();itr != fields->end();itr ++ )
     {
-        const auto field = (*fields)[idx - 1];
+        const auto field = *itr;//(*fields)[idx - 1];
         lua_getfield( L,index,field->name()->c_str() );
+
         if ( lua_isnil( L,index + 1 ) )
         {
             ERROR_WHAT( "missing required field" );
@@ -542,6 +543,7 @@ int lflatbuffers::encode_struct( lua_State *L,flatbuffers::uoffset_t &offset,
      * FlatBufferBuilder,then fill every member.
      */
     _fbb.StartStruct( object->minalign() );
+    _fbb.Pad( object->bytesize() );
     if ( do_encode_struct( L,schema,object,index ) < 0 )
     {
         return -1;
