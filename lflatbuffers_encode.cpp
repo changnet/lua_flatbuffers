@@ -315,16 +315,20 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
     }
     lua_checkstack( L,2 ); /* stack need to iterate lua table */
 
-    /* flatbuffers has to build in post-order.this make code a little mess up.
-     * we have to iterate fields to built nested field first,to avoid memory
-     * allocate,we use array insted of
-     * std::vector< std::pair<uint16_t,flatbuffers::uoffset_t> >
-     * so one object may contain MAX_NESTED(128) nested fields max.
+    /* flatbuffers has to build in post-order
+     * we have to iterate fields to built nested field first
+     * when built nested field,we can NOT StartTable yet
+     * so we need to save nested field temporary
      */
-    typedef struct { uint16_t offset;flatbuffers::uoffset_t uoffset; } offset_pair;
+
+    typedef struct 
+    {
+        flatbuffers::voffset_t offset;
+        flatbuffers::uoffset_t uoffset;
+    } field_pair;
 
     int nested_count = 0;
-    offset_pair nested_offset[MAX_NESTED];
+    field_pair nested_offset[MAX_NESTED];
 
     const auto fields = object->fields();
     for ( auto itr = fields->begin();itr != fields->end();itr ++ )
@@ -517,6 +521,7 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
         lua_pop( L,1 ); /* pop the value which push at CHECK_FIELD */
     }
 
+    // after StartTable,now we can add nested field to table 
     for ( int index = 0;index < nested_count;index ++ )
     {
         _fbb.AddOffset( nested_offset[index].offset,
@@ -549,8 +554,10 @@ int lflatbuffers::encode_struct( lua_State *L,flatbuffers::uoffset_t &offset,
         return -1;
     }
 
-    /* 清除临时变量，比如vtable的数量等等 */
-    _fbb.ClearOffsets();
+    /* 不能清除临时变量，比如vtable的数量等等
+     * struct虽然不用。但是这个struct有可能是table的一个field而已
+     */
+    // _fbb.ClearOffsets();
 
     offset =  _fbb.EndStruct();
 
