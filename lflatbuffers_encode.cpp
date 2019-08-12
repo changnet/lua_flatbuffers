@@ -215,7 +215,8 @@ int lflatbuffers::encode_vector( lua_State *L,flatbuffers::uoffset_t &offset,
                 while ( lua_next( L,index ) )
                 {
                     TYPE_CHECK( table );
-                    if ( do_encode_struct( L,data,schema,sub_object,index + 2 ) < 0 )
+                    if ( do_encode_struct( L,
+                        data + bytesize * sub_index,schema,sub_object,index + 2 ) < 0 )
                     {
                         lua_pop( L,2 );
                         return      -1;
@@ -321,7 +322,7 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
      * so we need to save nested field temporary
      */
 
-    typedef struct 
+    typedef struct
     {
         flatbuffers::voffset_t offset;
         flatbuffers::uoffset_t uoffset;
@@ -521,7 +522,7 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
         lua_pop( L,1 ); /* pop the value which push at CHECK_FIELD */
     }
 
-    // after StartTable,now we can add nested field to table 
+    // after StartTable,now we can add nested field to table
     for ( int index = 0;index < nested_count;index ++ )
     {
         _fbb.AddOffset( nested_offset[index].offset,

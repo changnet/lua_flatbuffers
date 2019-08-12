@@ -32,7 +32,7 @@ int main()
     infile.read(data, length);
     infile.close();
 
-    std::cout << "read " << length << " from file,start verify ..." << std::endl;
+    std::cout << "read " << length << " bytes from file,start verify ..." << std::endl;
 
     flatbuffers::Verifier vfer(reinterpret_cast<const uint8_t*>(data), length);
 
@@ -41,15 +41,17 @@ int main()
 
     TEST_EQ ( vfer.VerifyBuffer<MyGame::Example::Monster>(NULL),true );
 
-    // auto monster = MyGame::Example::GetMonster(data);
+    auto monster = MyGame::Example::GetMonster(data);
 
     // no need to verify again,already done in VerifyBuffer
     // TEST_EQ( monster->Verify(vfer),true );
 
-    //TEST_EQ( monster->mana() , 1500 );
-    //TEST_EQ( monster->hp() , 800 );
-    //TEST_STR_EQ( monster->name()->c_str(),"testMyMonster" );
+    TEST_EQ( monster->mana() , 1500 );
+    TEST_EQ( monster->hp() , 800 );
+    TEST_STR_EQ( monster->name()->c_str(),"testMyMonster" );
 
     delete []data;
+
+    std::cout << "OK!" << std::endl;
     return 0;
 }
