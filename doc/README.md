@@ -329,14 +329,16 @@ FlatBufferBuilder是flatbuffers最核心的逻辑，它管理了内存对齐、�
     // by the offsets themselves. In reverse:
     // Include space for the last offset and ensure empty tables have a
     // minimum size.
-    // max_voffset_是在TrackField记录最大的voffset
-    // + sizeof(voffset_t)是为下面的table_object_size预分配内存
+    // 字段在vtable中的地址(对应生成的cpp文件中的VT_XXX)是从4开始的
+    // 4表示 vtable_size + table_size
+    // 因此整个vtable的大小 = 4 + max_offset_ + 2
+    // 2表示最大的那个字段自己要占2字段，即下面的sizeof(voffset_t)
     max_voffset_ =
         (std::max)(static_cast<voffset_t>(max_voffset_ + sizeof(voffset_t)),
                    FieldIndexToOffset(0));
 
-    // 预分配内存，由于内存是从高到低的，buf_.data取的是cur_的地址，所以下面写数据时
-    // buf_.data()来取地址的，都是写到这个预分配的内存里
+    // 预分配vtable内存，由于内存是从高到低的，buf_.data取的是cur_的地址，
+    // 所以下面写数据时用buf_.data()来取地址的，都是写到这个预分配的内存里
     buf_.fill_big(max_voffset_);
     auto table_object_size = vtableoffsetloc - start;
 
@@ -354,8 +356,8 @@ FlatBufferBuilder是flatbuffers最核心的逻辑，它管理了内存对齐、�
     // Write the offsets into the table
     // 写入各个字段的位置偏移。这里buf_.data() + field_location->id来取地址，
     // id即voffset所以,各个字段是按顺序的.
-    // 大于max_voffset_的字段，它们的信息不包含在vtable里了。小于的，他们的位置仍然像旧版本
-    // 一样值为0
+    // 大于max_voffset_的字段，它们的信息不包含在vtable里了。
+    // 小于的，他们的位置仍然像旧版本一样值为0
     for (auto it = buf_.scratch_end() - num_field_loc * sizeof(FieldLoc);
          it < buf_.scratch_end(); it += sizeof(FieldLoc)) {
       auto field_location = reinterpret_cast<FieldLoc *>(it);
@@ -405,8 +407,9 @@ FlatBufferBuilder是flatbuffers最核心的逻辑，它管理了内存对齐、�
     // vtable is stored.
     // Offsets default direction is downward in memory for future format
     // flexibility (storing all vtables at the start of the file).
-    // 记录vtable的偏移量，因为这个table可能只是另一个table中的一个字段而。
-    // 那么这个vtableoffsetloc就是这个字段的uoffset
+    // 记录vtable相对当前地址的偏移量，因为上面去重的原因，vtable和table并不总是连续的
+    // 这里记录一个相对位置。因为vtable可能在前也可能在后，用的soffset_t
+    // 可参考GetVTable的用法
     WriteScalar(buf_.data_at(vtableoffsetloc),
                 static_cast<soffset_t>(vt_use) -
                     static_cast<soffset_t>(vtableoffsetloc));
