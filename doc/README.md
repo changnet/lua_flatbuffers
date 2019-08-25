@@ -1,7 +1,7 @@
-#### flatbuffers的原理
+### flatbuffers的原理
 
 flatbuffers与protobuf的最大区别，就是protobuf需要序列化与反序列化，而flatbuffers不用。这
-里以C++为例，简单说说flatbuffers如何达到无需序列化。例如，下面的一个结构体
+里以C++为例，简单说说flatbuffers如何做到无需序列化。例如，下面的一个结构体
 ```cpp
 struct Monster
 {
@@ -93,26 +93,50 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     return SetField<int16_t>(VT_HP, _hp, 100);
   }
 ```
-结构体中没有了成员变量，取而代之的是各个变量的偏移量，即VT_XXX。读写变量都是通过依稀来实现的。
+结构体中没有了成员变量，取而代之的是各个变量的地址，即VT_XXX。读写变量都是通过来实现的地址。
 
 上面只是一个简单的例子，说明了flatbuffers的原理。但flatbuffers做的远远比这个多，比这个复杂。
 毕竟还需要检验数据准确性。不同平台、不同语言的内存对齐都要统一，各个实现就会不一样。但这也说明一
 个问题，flatbuffers在各个语言的实现上效率是不一样的。flatbuffers原本也只是C++实现，然后扩展
-到其他语言的，如果是静态语言，都还好。毕竟编译后各个变量映射在内存中，不需要考虑对齐什么的，编译
-器都帮你做了。如果是动态语言，那么和直接从二进制流中读取数据没什么太大差别，比如lua的实现。
+到其他语言的。如果是静态语言，都还好，毕竟编译后各个变量映射在内存中，不需要考虑对齐什么的，编译
+器都帮你做了，效率也高。如果是动态语言，要么调用静态语言库，要么使用自己的数据结构实现，但效率都
+是有损失的。
 
-而我这里的实现，是用反射来做的，希望达到pbc那种不用生成各个类文件(monster.lua这种)。那么直接
-就和protobuf没什么区别了，无非就是反射解析数据的算法和protobuf的反序列化的算法谁快而已。由于
-protobuf有压缩，会慢一点点。
+比如Lua的实现，我这里是用反射来做的，希望像pbc那种不用生成各个类文件(monster.lua这种)。那么
+直接就和protobuf没什么区别了，无非就是反射解析数据的算法和protobuf的反序列化的算法谁快而已。
+由于protobuf有压缩，会慢一点点。
 
-#### flatbuffers类图
-![class](flatbuffers_class.png)
+flatbuffers官方Lua库的实现是通过纯Lua实现，但是我测试后发现效率其实并不高。而且粒度比较细，需
+要调用各种api才能生成一个buffer，可能适合某些场景，但我并不需要。
 
-#### schema文件与类的对应关系
+在我的机子上测试(测试内容不一致，结果仅供参考)
+```shell
+# 我的实现
+make test
+test 10000 times,each size:424 byte,encode: 0.51 second 7.97 MB/s;decode: 0.96 second，rate: 4.23 MB/s
+test 100000 times,each size:424 byte,encode: 5.30 second 7.63 MB/s;decode: 9.29 second，rate: 4.35 MB/s
+
+# flatbuffers lua实现
+cd flatbuffers-1.11.0/tests
+lua luatest.lua
+built 100 512-byte flatbuffers in 0.08sec: 1.24/msec, 0.61MB/sec
+built 1000 512-byte flatbuffers in 0.78sec: 1.28/msec, 0.63MB/sec
+built 10000 512-byte flatbuffers in 7.79sec: 1.28/msec, 0.63MB/sec
+traversed 100 440-byte flatbuffers in 0.03sec: 2.98/msec, 1.25MB/sec
+traversed 1000 440-byte flatbuffers in 0.31sec: 3.18/msec, 1.34MB/sec
+traversed 10000 440-byte flatbuffers in 2.77sec: 3.61/msec, 1.52MB/sec
+```
+
+### schema文件与类的对应关系
 ![schema file](flatbuffers_class_schema.png)
 
-#### 常见变量
-* uoffset_t sofffset_t voffset_t定义在base.h
+### flatbuffers类图
+![class](flatbuffers_class.png)
+
+
+
+### 常见变量
+* uoffset_t、sofffset_t、voffset_t定义在base.h
 
 ```cpp
 /// @cond FLATBUFFERS_INTERNAL
@@ -137,7 +161,7 @@ typedef uintmax_t largest_scalar_t;
 #define FLATBUFFERS_MAX_ALIGNMENT 16
 ```
 
-uoffset_t通常用来表示某个变量相对于buf_开始的位置，见：
+* uoffset_t通常用来表示某个变量相对于buf_开始的地址，见：
 ```cpp
 // vector_downward的成员函数size
 // reserved_、cur_、buf_的关系见下面的图
@@ -145,8 +169,19 @@ uoffset_t通常用来表示某个变量相对于buf_开始的位置，见：
     return static_cast<uoffset_t>(reserved_ - (cur_ - buf_));
   }
 ```
-voffset_t通常表示某个变量在vtable中的偏移量，占2byte，所以生成的文件里，每个变量是相差2。第
-一个变量从4开始是因vtable会写入table_object_size和max_voffset_，占4字段。
+
+* soffset_t表示某个变量相对于当前位置的地址，是一个signed类型，可正可负，地址也是可前可后
+
+* voffset_t通常表示某个变量在发table中的地址，占2byte，所以生成的文件里，每个变量是相差2。
+第一个变量从4开始是因为vtable包含vtable size和object size这两变量
+```cpp
+// Converts a Field ID to a virtual table offset.
+inline voffset_t FieldIndexToOffset(voffset_t field_id) {
+  // Should correspond to what EndTable() below builds up.
+  const int fixed_fields = 2;  // Vtable size and Object Size.
+  return static_cast<voffset_t>((field_id + fixed_fields) * sizeof(voffset_t));
+}
+```
 
 ```cpp
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
@@ -154,7 +189,7 @@ voffset_t通常表示某个变量在vtable中的偏移量，占2byte，所以生
     VT_MANA = 6,
     VT_HP = 8,
     VT_NAME = 10,
-    VT_INVENTORY = 14,
+    VT_INVENTORY = 14, // TODO:这个为啥多了2？？
     VT_COLOR = 16,
     VT_WEAPONS = 18,
     VT_EQUIPPED_TYPE = 20,
@@ -163,15 +198,10 @@ voffset_t通常表示某个变量在vtable中的偏移量，占2byte，所以生
   };
 ```
 
-* vtable
-* root table
+### flatbuffers的内存模型
+![flatbuffers memory](flatbuffers_hex_bin.png)
 
-#### flatbuffers的内存模型
-![flatbuffers memory](flatbuffers_vtable.png)
-
-root table offset类型为uoffset_t，即uint32_t
-
-#### flatbuffers的创建过程
+### flatbuffers的创建过程
 
 先写一个极其简单的schema文件test_cpp.fbs
 ```flatbuffers
@@ -232,7 +262,7 @@ g++ -std=c++11 -o test_cpp test_cpp.cpp -lflatbuffe
 0c00 0000 0000 0600 0800 0400 0600 0000 0900 0000
 ```
 
-分析创建流程
+### 分析创建流程
 ![flatbuffers serialize](flatbuffers_serialize.png)
 
 vector_downward
@@ -290,11 +320,7 @@ class FlatBufferBuilder {
 FlatBufferBuilder是flatbuffers最核心的逻辑，它管理了内存对齐、寻址等。
 
 
-根据代码分析vtable的创建(new version:flatbuffers 1.11.0)
-
-根据版本日志vtable结构应该是在1.8.0版本修改的
-> Vtable trimming in all language implementations: can reduce binary size 10-20%!
-在新版本中，AddElement函数会记录每个字段的voffset和uoffset
+根据代码分析vtable的创建
 ```cpp
   // When writing fields, we track where they are, so we can create correct
   // vtables later.
@@ -357,7 +383,7 @@ FlatBufferBuilder是flatbuffers最核心的逻辑，它管理了内存对齐、�
     // 写入各个字段的位置偏移。这里buf_.data() + field_location->id来取地址，
     // id即voffset所以,各个字段是按顺序的.
     // 大于max_voffset_的字段，它们的信息不包含在vtable里了。
-    // 小于的，他们的位置仍然像旧版本一样值为0
+    // 小于的，他们的地址为0
     for (auto it = buf_.scratch_end() - num_field_loc * sizeof(FieldLoc);
          it < buf_.scratch_end(); it += sizeof(FieldLoc)) {
       auto field_location = reinterpret_cast<FieldLoc *>(it);

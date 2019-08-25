@@ -160,21 +160,25 @@ end
 print( table.concat(hex_tbl," ") )
 
 local max = 100000
-local sx = os.clock()
+local encode_beg = os.clock()
 
 local buffer
 for index = 1,max do
     buffer = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",monster )
 end
-local sy = os.clock()
+local encode_end = os.clock()
 
-local ex = os.clock()
+local decode_beg = os.clock()
 local mon_tbl
 for index = 1,max do
     mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer )
 end
-local ey = os.clock()
+local decode_end = os.clock()
+
+local encode_tm = encode_end - encode_beg
+local decode_tm = decode_end - decode_beg
+local buff_size = string.len(buffer) * max / 1024 / 1024 -- byte to MB
 
 print( string.format(
-    "simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
-    max,sy - sx,ey - ex))
+    "test %d times,each size:%d byte,encode: %.2f second %.2f MB/s;decode: %.2f second，rate: %.2f MB/s",
+    max,string.len(buffer),encode_tm, buff_size / encode_tm,decode_tm, buff_size / decode_tm))

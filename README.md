@@ -7,9 +7,9 @@ See more about google flatbuffers at http://google.github.io/flatbuffers/
 
 Dependency
 -------------
+* gcc >= c++11
 * lua >=5.3.0(http://www.lua.org/)
 * FlatBuffers >=1.11.0(https://github.com/google/flatbuffers/releases)
-* linux(g++ support c++11)
 
 make sure flatbuffers shared library is built if you need to build the lua_flatbuffers.so.
 
@@ -23,7 +23,7 @@ Make sure lua and FlatBuffers develop environment already installed
  * make buildfbb(this will install FlatBuffers with shared library)
  * make
  * make test
- * Copy lua_flatbuffers.so to your lua project's c module directory or link against liblua_flatbuffers.a
+ * copy lua_flatbuffers.so to your lua project's c module directory or link against liblua_flatbuffers.a
 
 Api
 -----
@@ -46,20 +46,14 @@ Example & Benchmark
 
 See 'test.lua'   
 
-simple benchmark test 100000 times,encode elapsed time: 1.14 second,decode elapsed time: 2.36 second
+Travis-ci test 100000 times,encode elapsed time: 1.14 second,decode elapsed time: 2.36 second
 
 Note
 -----
-1. namespace not supported! you have to put objects with same name in different
-schema file,though they are in different namespace.
+1. namespace not supported! you have to put objects with same name in different schema file,though they are in different namespace.
 2. deprecated field still be encode or decode.
 3. [byte] or [ubyte] will be encode as lua string
 
 How flatbuffers reflection work
 ----
 See [document](doc/README.md)
-
-TODO
-----
-Update monster_test.fbs from 1.4.0 to 1.11.0,test is much slower,
-encode cost 3.2s vs 5.17s,find out why.
