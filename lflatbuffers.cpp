@@ -58,13 +58,8 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
 /* load a binary flatbuffers schema file */
 bool lflatbuffers::load_bfbs_file( const char *file )
 {
-    /* Both dirname() and basename() may modify the contents of path, so it
-       may be desirable to pass a copy when calling one of these functions.
-     */
-    char file_name[PATH_MAX];
-    snprintf( file_name,PATH_MAX,"%s",file );
+    const std::string &&name = std::filesystem::path(file).filename().string();
 
-    const char *name = basename( file_name );
     /* if the file already loaded,consider it need to update,not dumplicate */
     std::string &bfbs = _bfbs_buffer[name];
     if ( !flatbuffers::LoadFile( file,true,&bfbs ) )
