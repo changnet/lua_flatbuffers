@@ -7,7 +7,7 @@ See more about google flatbuffers at http://google.github.io/flatbuffers/
 
 Dependency
 -------------
-* gcc >= c++11
+* gcc >= c++17
 * lua >=5.3.0(http://www.lua.org/)
 * FlatBuffers >=1.11.0(https://github.com/google/flatbuffers/releases)
 

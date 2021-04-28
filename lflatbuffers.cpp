@@ -3,13 +3,7 @@
 #include <flatbuffers/util.h>
 
 #include <cerrno>
-#include <iostream>
-
-/* linux open dir */
-#include <dirent.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <libgen.h> /* for basename */
+#include <filesystem> // C++17 directory_iterator
 
 /* check if suffix match */
 static int is_suffix_file( const char *path,const char *suffix )
@@ -32,52 +26,32 @@ static int is_suffix_file( const char *path,const char *suffix )
 /* load all the schema files in this directory */
 int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
 {
-    char file_path[PATH_MAX];
-    int sz = snprintf( file_path,PATH_MAX,"%s/",path );
-    if ( sz <= 0 )
-    {
-        ERROR_WHAT( "path too long:" );
-        ERROR_APPEND( path );
-
-        return -1;
-    }
-
-    DIR *dir = opendir( path );
-    if ( !dir )
+    int count = 0;
+    std::error_code e;
+    std::filesystem::directory_iterator dir_iter(path, e);
+    if (e)
     {
         ERROR_WHAT( "can not open directory:" );
         ERROR_APPEND( path );
         ERROR_APPEND( "," );
-        ERROR_APPEND( strerror(errno) );
+        ERROR_APPEND( e.message() );
 
         return -1;
     }
-
-    int count = 0;
-    struct dirent *dt = NULL;
-    while ( (dt = readdir( dir )) )
+    for (auto &p : dir_iter)
     {
-        snprintf( file_path + sz,PATH_MAX,"%s",dt->d_name );
+        if (!p.is_regular_file()) continue;
 
-        struct stat path_stat;
-        stat( file_path, &path_stat );
+        const char *c_path = p.path().string().c_str();
+        if (!is_suffix_file(c_path, suffix)) continue;
 
-        if ( S_ISREG( path_stat.st_mode )
-            && is_suffix_file( dt->d_name,suffix ) )
+        if (!load_bfbs_file(c_path))
         {
-
-            if ( !load_bfbs_file( file_path ) )
-            {
-                _bfbs_buffer.clear();
-
-                closedir( dir );
-                return       -1;
-            }
-            ++ count;
+            return -1;
         }
+        ++count;
     }
 
-    closedir( dir );
     return    count;
 }
 
