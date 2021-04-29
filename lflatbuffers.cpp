@@ -69,7 +69,13 @@ bool lflatbuffers::load_bfbs_file( const char *file )
         ERROR_WHAT( "can not load file:" );
         ERROR_APPEND( file );
         ERROR_APPEND( "," );
+#ifdef _MSC_VER
+        char buf[512];
+        strerror_s(buf, sizeof(buf), errno);
+        ERROR_APPEND(buf);
+#else
         ERROR_APPEND( strerror(errno) );
+#endif
 
         return false;
     }
