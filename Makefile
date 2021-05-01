@@ -1,7 +1,6 @@
 ##### Build defaults #####
 CMAKE = cmake
 MAKE = make
-CXX = g++
 
 TARGET_SO =         lua_flatbuffers.so
 TARGET_A  =         liblua_flatbuffers.a
