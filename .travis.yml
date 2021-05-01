@@ -10,11 +10,13 @@ addons:
         - ubuntu-toolchain-r-test
       packages:
         - g++-8
-    env:
-        - CC=gcc-8
-        - CXX=g++-8
 
 before_install:
+    - if [ "$CXX" = "g++" ]; then export CXX="g++-8" CC="gcc-8"; fi
+    - echo ${CC}
+    - echo ${CXX}
+    - ${CXX} --version
+
     - sudo apt-get install -qq cmake
     - wget "http://www.lua.org/ftp/lua-5.3.5.tar.gz" && tar xzf lua-5.3.5.tar.gz && cd lua-5.3.5 && sudo make linux test install;
 
