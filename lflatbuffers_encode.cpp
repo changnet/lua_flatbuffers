@@ -194,7 +194,7 @@ int lflatbuffers::encode_vector( lua_State *L,flatbuffers::uoffset_t &offset,
                  * vector length to align
                  */
                 lua_len( L,index );
-                int length = lua_tointeger( L,index + 1 );
+                int length = (int)lua_tointeger( L,index + 1 );
                 lua_pop( L,1 );
 
                 if ( length <= 0 ) { lua_pop( L,1 );return 0; }
@@ -410,7 +410,7 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
                     lua_pop(L,2); return -1;
                 }
 
-                int union_type = lua_tointeger( L,index + 2 );
+                int union_type = (int)lua_tointeger( L,index + 2 );
                 lua_pop( L,1 ); /* pop union type */
 
                 /* here we encode union element,the union type should be encode

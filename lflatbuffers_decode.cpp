@@ -131,7 +131,7 @@ int lflatbuffers::decode_struct(
                 int64_t val = flatbuffers::GetAnyValueI(
                     base_type,root.GetAddressOf(field->offset()) );
 
-                lua_pushboolean( L,val );
+                lua_pushboolean( L,val ? 1 : 0 );
             }break;
             case reflection::UType :
             case reflection::Byte  :
