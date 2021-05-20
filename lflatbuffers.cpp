@@ -42,10 +42,10 @@ int lflatbuffers::load_bfbs_path( const char *path,const char *suffix )
     {
         if (!p.is_regular_file()) continue;
 
-        const char *c_path = p.path().string().c_str();
-        if (!is_suffix_file(c_path, suffix)) continue;
+        const std::string s_path = p.path().string();
+        if (!is_suffix_file(s_path.c_str(), suffix)) continue;
 
-        if (!load_bfbs_file(c_path))
+        if (!load_bfbs_file(s_path.c_str()))
         {
             return -1;
         }
