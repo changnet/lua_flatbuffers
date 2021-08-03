@@ -305,6 +305,19 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
         _fbb.AddElement<T>(off, static_cast<T>(lua_tonumber( L,index + 1 )),0 );\
     }while(0)
 
+#define ADD_INTEGER(T)   \
+    do{\
+        if ( !lua_isnumber( L,index + 1 ) )\
+        {\
+            ERROR_WHAT( "expect integer,got " );\
+            ERROR_APPEND( lua_typename( L,lua_type(L,index + 1) ) );\
+            ERROR_TRACE( field->name()->c_str() );\
+            lua_pop( L,1 );\
+            return      -1;\
+        }\
+        _fbb.AddElement<T>(off, static_cast<T>(lua_tointeger( L,index + 1 )),0 );\
+    }while(0)
+
     assert( !object->is_struct() ); /* call encode struct insted */
 
 
@@ -513,8 +526,14 @@ int lflatbuffers::encode_table( lua_State *L,flatbuffers::uoffset_t &offset,
             case reflection::UShort:CHECK_FIELD();ADD_NUMBER(uint16_t);break;
             case reflection::Int:   CHECK_FIELD();ADD_NUMBER(int32_t );break;
             case reflection::UInt:  CHECK_FIELD();ADD_NUMBER(uint32_t);break;
+#if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM >= 503
+            // if support int64, do NOT convert to number
+            case reflection::Long:  CHECK_FIELD();ADD_INTEGER(int64_t );break;
+            case reflection::ULong: CHECK_FIELD();ADD_INTEGER(uint64_t);break;
+#else
             case reflection::Long:  CHECK_FIELD();ADD_NUMBER(int64_t );break;
             case reflection::ULong: CHECK_FIELD();ADD_NUMBER(uint64_t);break;
+#endif
             case reflection::Float: CHECK_FIELD();ADD_NUMBER(float   );break;
             case reflection::Double:CHECK_FIELD();ADD_NUMBER(double  );break;
         }

@@ -130,6 +130,24 @@ monster.testf3 = 0.0
 
 monster.testarrayofstring2 = { "jane","mary" }
 
+-- math.maxinteger support
+if _VERSION >= "Lua 5.3" then
+    local min_val = {
+        val = math.mininteger
+    }
+    local min_buff = lfb:encode("monster_test.bfbs","MyGame.Example.Stat", min_val)
+    local min_val2 = lfb:decode("monster_test.bfbs","MyGame.Example.Stat", min_buff)
+    assert(min_val2.val == min_val.val)
+
+    local max_val = {
+        val = math.maxinteger
+    }
+    local max_buff = lfb:encode("monster_test.bfbs","MyGame.Example.Stat", max_val)
+    local max_val2 = lfb:decode("monster_test.bfbs","MyGame.Example.Stat", max_buff)
+    print(string.format("expect %d, got %d", max_val.val, max_val2.val))
+    assert(max_val2.val == max_val.val)
+end
+
 local buffer  = lfb:encode( "monster_test.bfbs","MyGame.Example.Monster",monster )
 local mon_tbl = lfb:decode( "monster_test.bfbs","MyGame.Example.Monster",buffer  )
 vd( mon_tbl )
